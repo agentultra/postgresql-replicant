@@ -1,0 +1,7 @@
+* Version 1 [0/6]
+** TODO Connection Handling
+** TODO Configuration
+** TODO Slot setup
+** TODO Async Loop
+** TODO Message parser
+** TODO API
