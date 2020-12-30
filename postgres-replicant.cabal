@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 66490a63a373b91c35eada121eca43bcb0fb70174a636a2f53add99ccb71eb05
+-- hash: 010a5a39eeefe639deb2da08c2a9fbe0cb91f3d7263c72aad256d021332aaf48
 
 name:           postgres-replicant
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 
 library
   exposed-modules:
+      Database.PostgreSQL.Replicant.Message
       Lib
   other-modules:
       Paths_postgres_replicant
@@ -37,6 +38,7 @@ library
       base >=4.7 && <5
     , bytestring
     , postgresql-libpq
+    , text
   default-language: Haskell2010
 
 test-suite postgres-replicant-test

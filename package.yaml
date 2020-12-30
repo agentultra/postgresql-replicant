@@ -28,6 +28,7 @@ library:
   dependencies:
   - bytestring
   - postgresql-libpq
+  - text
 
 tests:
   postgres-replicant-test:
