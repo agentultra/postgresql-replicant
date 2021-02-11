@@ -20,6 +20,9 @@ extra-source-files:
 # common to point users to the README.md file.
 description: Please see the README on GitHub at <https://github.com/agentultra/postgres-replicant#readme>
 
+default-extensions:
+- OverloadedStrings
+
 dependencies:
 - base >= 4.7 && < 5
 
@@ -28,7 +31,20 @@ library:
   dependencies:
   - bytestring
   - postgresql-libpq
+  - stm
   - text
+
+executables:
+  replicant-example:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - postgresql-libpq
+    - postgres-replicant
 
 tests:
   postgres-replicant-test:
