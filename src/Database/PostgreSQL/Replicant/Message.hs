@@ -21,6 +21,8 @@ data Commit
     }
     deriving (Eq, Show)
 
+data Column = Column deriving (Eq, Show)
+
 data Origin
   = Origin
   { _originCommitLsn :: Int

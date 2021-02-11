@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 010a5a39eeefe639deb2da08c2a9fbe0cb91f3d7263c72aad256d021332aaf48
+-- hash: 4cff25d56859ace8022294dcea42b41cdba3fe725f77246e633b8ee2281d0284
 
 name:           postgres-replicant
 version:        0.1.0.0
@@ -29,16 +29,33 @@ source-repository head
 library
   exposed-modules:
       Database.PostgreSQL.Replicant.Message
+      Database.PostgreSQL.Replicant.Protocol
       Lib
   other-modules:
       Paths_postgres_replicant
   hs-source-dirs:
       src
+  default-extensions: OverloadedStrings
   build-depends:
       base >=4.7 && <5
     , bytestring
     , postgresql-libpq
+    , stm
     , text
+  default-language: Haskell2010
+
+executable replicant-example
+  main-is: Main.hs
+  other-modules:
+      Paths_postgres_replicant
+  hs-source-dirs:
+      app
+  default-extensions: OverloadedStrings
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , postgres-replicant
+    , postgresql-libpq
   default-language: Haskell2010
 
 test-suite postgres-replicant-test
@@ -48,6 +65,7 @@ test-suite postgres-replicant-test
       Paths_postgres_replicant
   hs-source-dirs:
       test
+  default-extensions: OverloadedStrings
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
