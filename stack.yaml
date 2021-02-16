@@ -41,6 +41,8 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 # extra-deps: []
+extra-deps:
+- keep-alive-0.1.1.0@sha256:92203e8d7f925693b97c130036f449013474656521587e3f60848ec3e0b2acce,1677
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

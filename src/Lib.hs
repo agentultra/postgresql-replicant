@@ -11,6 +11,7 @@ import qualified Data.ByteString.Char8 as B
 import Data.Maybe (fromMaybe)
 import Database.PostgreSQL.LibPQ
 import GHC.Event
+import Network.Socket.KeepAlive
 import System.Posix.Types
 
 import Database.PostgreSQL.Replicant.Protocol
@@ -51,7 +52,7 @@ withConnection settings = do
 
   where
     pollConnectStart :: Connection -> Fd -> IO PollingStatus
-    pollConnectStart conn fd = do
+    pollConnectStart conn fd@(Fd cint) = do
       pollStatus <- connectPoll conn
       case pollStatus of
         PollingReading -> do
@@ -60,5 +61,7 @@ withConnection settings = do
         PollingWriting -> do
           threadWaitWrite fd
           pollConnectStart conn fd
-        PollingOk -> pure PollingOk
+        PollingOk -> do
+          keepAliveResult <- setKeepAlive cint $ KeepAlive True 60 2
+          pure PollingOk
         PollingFailed -> pure PollingFailed

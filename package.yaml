@@ -30,6 +30,7 @@ library:
   source-dirs: src
   dependencies:
   - bytestring
+  - keep-alive
   - postgresql-libpq
   - stm
   - text
