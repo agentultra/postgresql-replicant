@@ -5,7 +5,7 @@ import Database.PostgreSQL.Replicant.Protocol
 
 main :: IO ()
 main = do
-  c <- connectdb "user=jking dbname=hackday2 host=localhost port=5432 replication=database"
+  c <- connectdb "user=jking dbname=hackday host=localhost port=5432 replication=database"
   (Just info) <- identifySystemSync c
-  (Just repSlot) <- createReplicationSlotSync c "hackday2_sub_3"
+  (Just repSlot) <- createReplicationSlotSync c "hackday_sub_1"
   startReplicationStream c (replicationSlotName repSlot) (identifySystemLogPos info)

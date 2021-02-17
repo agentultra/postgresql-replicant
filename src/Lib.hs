@@ -46,7 +46,7 @@ withConnection settings = do
     PollingOk -> do
       putStrLn "Connection ready!"
       (Just info) <- identifySystemSync conn
-      (Just repSlot) <- createReplicationSlotSync conn "hackday2_sub_1"
+      (Just repSlot) <- createReplicationSlotSync conn $ B.pack . pgSlotName $ settings
       startReplicationStream conn (replicationSlotName repSlot) (identifySystemLogPos info)
       pure ()
 
