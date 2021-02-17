@@ -42,7 +42,7 @@ data ReplicationSlot =
 
 createReplicationSlotCommand :: ByteString -> ByteString
 createReplicationSlotCommand slotName =
-  B.intercalate " " ["CREATE_REPLICATION_SLOT", slotName, "LOGICAL test_decoding"]
+  B.intercalate " " ["CREATE_REPLICATION_SLOT", slotName, "LOGICAL wal2json"]
 
 createReplicationSlotSync :: Connection -> ByteString -> IO (Maybe ReplicationSlot)
 createReplicationSlotSync conn slotName = do
