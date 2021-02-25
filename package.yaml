@@ -21,7 +21,9 @@ extra-source-files:
 description: Please see the README on GitHub at <https://github.com/agentultra/postgres-replicant#readme>
 
 default-extensions:
+- DeriveGeneric
 - OverloadedStrings
+- TypeApplications
 
 dependencies:
 - base >= 4.7 && < 5
@@ -29,7 +31,9 @@ dependencies:
 library:
   source-dirs: src
   dependencies:
+  - cereal
   - bytestring
+  - cereal
   - keep-alive
   - postgresql-libpq
   - stm
@@ -56,4 +60,8 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - cereal
+    - binary
+    - bytestring
+    - hspec
     - postgres-replicant
