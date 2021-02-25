@@ -3,7 +3,10 @@ module Database.PostgreSQL.Replicant.Protocol where
 import Control.Monad (forever)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
+import Data.Serialize
 import Database.PostgreSQL.LibPQ
+
+import Database.PostgreSQL.Replicant.Message
 
 data IdentifySystem
   = IdentifySystem
@@ -76,6 +79,9 @@ startReplicationStream conn slotName systemLogPos = do
           case d of
             CopyOutRow row -> do
               print row
+              case decode @PrimaryKeepAlive row of
+                Left err -> print err
+                Right m  -> putStrLn $ show m
             CopyOutError -> do
               err <- errorMessage conn
               print err

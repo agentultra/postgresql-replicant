@@ -1,6 +1,9 @@
 module Database.PostgreSQL.Replicant.Message where
 
+import Data.Serialize
 import Data.Text (Text)
+import GHC.Generics
+import GHC.Int
 
 newtype Oid a = Oid Int
   deriving (Eq, Show)
@@ -58,3 +61,46 @@ data ReplicationMessage
   | InsertMessage Insert
   | Unsupported
   deriving (Eq, Show)
+
+data ResponseExpectation
+  = ShouldRespond
+  | DoNotRespond
+  deriving (Eq, Generic, Show)
+
+instance Serialize ResponseExpectation where
+  put ShouldRespond = putWord8 1
+  put DoNotRespond = putWord8 0
+
+  get = do
+    flag <- getWord8
+    case flag of
+      0 -> pure DoNotRespond
+      1 -> pure ShouldRespond
+      _ -> fail "Invalid response expectation flag"
+
+data PrimaryKeepAlive
+  = PrimaryKeepAlive
+  { primaryKeepAliveWalEnd              :: Int64
+  , primaryKeepAliveSendTime            :: Int64
+  , primaryKeepAliveResponseExpectation :: ResponseExpectation
+  }
+  deriving (Eq, Generic, Show)
+
+instance Serialize PrimaryKeepAlive where
+  put (PrimaryKeepAlive walEnd sendTime responseExpectation) = do
+    putWord8 0x6B -- 'k'
+    putInt64be walEnd
+    putInt64be sendTime
+    case responseExpectation of
+      ShouldRespond -> putWord8 1
+      DoNotRespond  -> putWord8 0
+
+  get = do
+    _ <- getBytes 1
+    walEnd <- getInt64be
+    sendTime <- getInt64be
+    flagByte <- getByteString 1
+    case decode @ResponseExpectation flagByte of
+      Left err -> fail "Could not decode response flag"
+      Right responseExpectation ->
+        pure $ PrimaryKeepAlive walEnd sendTime responseExpectation
