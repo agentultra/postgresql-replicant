@@ -102,3 +102,41 @@ instance Serialize PrimaryKeepAlive where
     case eitherFlag of
       Left err   -> fail "Could not decode response flag"
       Right flag -> pure $ PrimaryKeepAlive walEnd sendTime flag
+
+data StandbyStatusUpdate
+  = StandbyStatusUpdate
+  { standbyStatuUpdateLastWalByteReceived  :: Int64
+  , standbyStatusUpdateLastWalByteFlushed  :: Int64
+  , standbyStatusUpdateLastWalByteApplied  :: Int64
+  , standbyStatusUpdateSendTime            :: Int64
+  , standbyStatusUpdateResponseExpectation :: ResponseExpectation
+  }
+  deriving (Eq, Generic, Show)
+
+instance Serialize StandbyStatusUpdate where
+  put (StandbyStatusUpdate
+       walReceived
+       walFlushed
+       walApplied
+       sendTime
+       responseExpectation) = do
+    putWord8 0x72 -- 'r'
+    putInt64be walReceived
+    putInt64be walFlushed
+    putInt64be walApplied
+    putInt64be sendTime
+    case responseExpectation of
+      ShouldRespond -> putWord8 1
+      DoNotRespond  -> putWord8 0
+
+  get = do
+    _ <- getBytes 1 -- should expect 0x72, 'r'
+    walReceived <- getInt64be
+    walFlushed  <- getInt64be
+    walApplied  <- getInt64be
+    sendTime    <- getInt64be
+    eitherFlag  <- responseExpectation <$> getWord8
+    case eitherFlag of
+      Left err -> fail "Could not decode response flag"
+      Right flag -> pure
+        $ StandbyStatusUpdate walReceived walFlushed walApplied sendTime flag

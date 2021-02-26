@@ -25,3 +25,16 @@ main = hspec $ do
         (decode $ examplePrimaryKeepAliveMessage)
           `shouldBe`
           (Right $ PrimaryKeepAlive 123 346 ShouldRespond)
+
+    describe "StandbyStatusUpdate" $ do
+      it "should encode a valid standby status update message" $ do
+        (encode $ StandbyStatusUpdate 213 232 234 454 DoNotRespond)
+          `shouldBe`
+          B.concat
+          [ B.pack [0x72]
+          , encode @Int64 213
+          , encode @Int64 232
+          , encode @Int64 234
+          , encode @Int64 454
+          , encode @Word8 0
+          ]
