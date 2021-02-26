@@ -2,6 +2,7 @@ module Database.PostgreSQL.Replicant.Message where
 
 import Data.Serialize
 import Data.Text (Text)
+import Data.Word
 import GHC.Generics
 import GHC.Int
 
@@ -67,16 +68,14 @@ data ResponseExpectation
   | DoNotRespond
   deriving (Eq, Generic, Show)
 
-instance Serialize ResponseExpectation where
-  put ShouldRespond = putWord8 1
-  put DoNotRespond = putWord8 0
+data ParseError
+  = InvalidResponseExpectation
+  deriving (Eq, Show)
 
-  get = do
-    flag <- getWord8
-    case flag of
-      0 -> pure DoNotRespond
-      1 -> pure ShouldRespond
-      _ -> fail "Invalid response expectation flag"
+responseExpectation :: Word8 -> Either ParseError ResponseExpectation
+responseExpectation 0 = Right DoNotRespond
+responseExpectation 1 = Right ShouldRespond
+responseExpectation _ = Left InvalidResponseExpectation
 
 data PrimaryKeepAlive
   = PrimaryKeepAlive
@@ -99,8 +98,7 @@ instance Serialize PrimaryKeepAlive where
     _ <- getBytes 1
     walEnd <- getInt64be
     sendTime <- getInt64be
-    flagByte <- getByteString 1
-    case decode @ResponseExpectation flagByte of
-      Left err -> fail "Could not decode response flag"
-      Right responseExpectation ->
-        pure $ PrimaryKeepAlive walEnd sendTime responseExpectation
+    eitherFlag <- responseExpectation <$> getWord8
+    case eitherFlag of
+      Left err   -> fail "Could not decode response flag"
+      Right flag -> pure $ PrimaryKeepAlive walEnd sendTime flag
