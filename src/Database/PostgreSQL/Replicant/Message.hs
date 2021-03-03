@@ -1,5 +1,6 @@
 module Database.PostgreSQL.Replicant.Message where
 
+import Data.Aeson
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.Serialize
@@ -9,6 +10,8 @@ import GHC.Generics
 import GHC.Int
 
 import Database.PostgreSQL.Replicant.Serialize
+
+-- WAL Replication Stream messages
 
 data ResponseExpectation
   = ShouldRespond
@@ -154,3 +157,26 @@ instance Serialize WalCopyData where
         keepAlive <- get
         pure $ KeepAliveM keepAlive
       _    -> fail "Unrecognized WalCopyData"
+
+-- WAL Log Data
+
+data Insert = Insert
+
+data Update = Update
+
+data Delete = Delete
+
+data Message = Message
+
+data WalLogData
+  = WInsert Insert
+  | WUpdate Update
+  | WDelete Delete
+  | WMessage Message
+  deriving (Eq, Generic, Show)
+
+instance ToJSON WalLogData where
+  toJSON = genericToJSON defaultOptions { sumEncoding = UntaggedObject }
+
+instance FromJSON WalLogData where
+  parseJSON = genericFromJSON defaultOptions { sumEncoding = UntaggedObject }

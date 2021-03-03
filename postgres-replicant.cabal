@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6e3d380f12cbc7474a796e8fe64788907bdddd81f4f6c404f14fe260f275faf2
+-- hash: ccf0fc8f77909b1ed03f5aa18c02383e3a9f9411706e1238b768c51809d61f72
 
 name:           postgres-replicant
 version:        0.1.0.0
@@ -38,7 +38,8 @@ library
       src
   default-extensions: DeriveGeneric OverloadedStrings TypeApplications
   build-depends:
-      base >=4.7 && <5
+      aeson
+    , base >=4.7 && <5
     , bytestring
     , cereal
     , keep-alive
