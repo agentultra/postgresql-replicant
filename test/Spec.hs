@@ -3,6 +3,7 @@ import Test.Hspec
 import Data.Serialize
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as B8
 import Data.Word
 import GHC.Int
 
@@ -38,3 +39,10 @@ main = hspec $ do
           , encode @Int64 454
           , encode @Word8 0
           ]
+
+    describe "XLogData" $ do
+      it "should encode/decode a valid xLogData message" $ do
+        let msg = XLogData 123 234 345 (B8.pack "hello")
+        (decode . encode $ msg)
+          `shouldBe`
+          Right msg

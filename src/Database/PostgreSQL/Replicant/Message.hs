@@ -1,5 +1,7 @@
 module Database.PostgreSQL.Replicant.Message where
 
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import Data.Serialize
 import Data.Text (Text)
 import Data.Word
@@ -140,3 +142,34 @@ instance Serialize StandbyStatusUpdate where
       Left err -> fail "Could not decode response flag"
       Right flag -> pure
         $ StandbyStatusUpdate walReceived walFlushed walApplied sendTime flag
+
+data XLogData
+  = XLogData
+  { xLogDataWalStart :: Int64
+  , xLogDataWalEnd :: Int64
+  , xLogDataSendTime :: Int64
+  , xLogdataWalData :: ByteString
+  }
+  deriving (Eq, Generic, Show)
+
+instance Serialize XLogData where
+  put (XLogData walStart walEnd sendTime walData) = do
+    putWord8 0x77 -- 'w'
+    putInt64be walStart
+    putInt64be walEnd
+    putInt64be sendTime
+    putByteString walData
+
+  get = do
+    _ <- getBytes 1 -- should expec '0x77', 'w'
+    walStart <- getInt64be
+    walEnd   <- getInt64be
+    sendTime <- getInt64be
+    walData  <- consumeByteStringToEnd
+    pure $ XLogData walStart walEnd sendTime walData
+
+consumeByteStringToEnd :: Get ByteString
+consumeByteStringToEnd = do
+  numRemaining <- remaining
+  bs           <- getByteString numRemaining
+  pure $ bs
