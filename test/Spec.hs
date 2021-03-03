@@ -46,3 +46,10 @@ main = hspec $ do
         (decode . encode $ msg)
           `shouldBe`
           Right msg
+
+    describe "HotStandbyFeedback" $ do
+      it "should encode/decode a valid HotStandbyFeedback message" $ do
+        let msg = HotStandbyFeedback 123 234 456
+        (decode . encode $ msg)
+          `shouldBe`
+          Right msg

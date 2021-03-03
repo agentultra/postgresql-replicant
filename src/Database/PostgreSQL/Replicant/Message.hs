@@ -168,6 +168,28 @@ instance Serialize XLogData where
     walData  <- consumeByteStringToEnd
     pure $ XLogData walStart walEnd sendTime walData
 
+data HotStandbyFeedback
+  = HotStandbyFeedback
+  { hotStandbyFeedbackClientSendTime :: Int64
+  , hotStandbyFeedbackCurrentXmin    :: Int32
+  , hotStandbyFeedbackCurrentEpoch   :: Int32
+  }
+  deriving (Eq, Generic, Show)
+
+instance Serialize HotStandbyFeedback where
+  put (HotStandbyFeedback clientSendTime currentXMin currentEpoch) = do
+    putWord8 0x68
+    putInt64be clientSendTime
+    putInt32be currentXMin
+    putInt32be currentEpoch
+
+  get = do
+    _ <- getBytes 1 -- should expect '0x68' 'h'
+    clientSendTime <- getInt64be
+    currentXmin <- getInt32be
+    currentEpoch <- getInt32be
+    pure $ HotStandbyFeedback clientSendTime currentXmin currentEpoch
+
 consumeByteStringToEnd :: Get ByteString
 consumeByteStringToEnd = do
   numRemaining <- remaining
