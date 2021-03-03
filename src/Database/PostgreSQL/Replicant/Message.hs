@@ -72,14 +72,16 @@ data ResponseExpectation
   | DoNotRespond
   deriving (Eq, Generic, Show)
 
-data ParseError
-  = InvalidResponseExpectation
-  deriving (Eq, Show)
+instance Serialize ResponseExpectation where
+  put ShouldRespond = putWord8 1
+  put DoNotRespond  = putWord8 0
 
-responseExpectation :: Word8 -> Either ParseError ResponseExpectation
-responseExpectation 0 = Right DoNotRespond
-responseExpectation 1 = Right ShouldRespond
-responseExpectation _ = Left InvalidResponseExpectation
+  get = do
+    responseFlag <- getWord8
+    case responseFlag of
+      0 -> pure DoNotRespond
+      1 -> pure ShouldRespond
+      _ -> fail "Unrecognized response expectation flag"
 
 data PrimaryKeepAlive
   = PrimaryKeepAlive
@@ -94,18 +96,14 @@ instance Serialize PrimaryKeepAlive where
     putWord8 0x6B -- 'k'
     putInt64be walEnd
     putInt64be sendTime
-    case responseExpectation of
-      ShouldRespond -> putWord8 1
-      DoNotRespond  -> putWord8 0
+    put responseExpectation
 
   get = do
     _ <- getBytes 1
     walEnd <- getInt64be
     sendTime <- getInt64be
-    eitherFlag <- responseExpectation <$> getWord8
-    case eitherFlag of
-      Left err   -> fail "Could not decode response flag"
-      Right flag -> pure $ PrimaryKeepAlive walEnd sendTime flag
+    responseExpectation <- get
+    pure $ PrimaryKeepAlive walEnd sendTime responseExpectation
 
 data StandbyStatusUpdate
   = StandbyStatusUpdate
@@ -129,21 +127,22 @@ instance Serialize StandbyStatusUpdate where
     putInt64be walFlushed
     putInt64be walApplied
     putInt64be sendTime
-    case responseExpectation of
-      ShouldRespond -> putWord8 1
-      DoNotRespond  -> putWord8 0
+    put responseExpectation
 
   get = do
     _ <- getBytes 1 -- should expect 0x72, 'r'
-    walReceived <- getInt64be
-    walFlushed  <- getInt64be
-    walApplied  <- getInt64be
-    sendTime    <- getInt64be
-    eitherFlag  <- responseExpectation <$> getWord8
-    case eitherFlag of
-      Left err -> fail "Could not decode response flag"
-      Right flag -> pure
-        $ StandbyStatusUpdate walReceived walFlushed walApplied sendTime flag
+    walReceived         <- getInt64be
+    walFlushed          <- getInt64be
+    walApplied          <- getInt64be
+    sendTime            <- getInt64be
+    responseExpectation <- get
+    pure $
+      StandbyStatusUpdate
+      walReceived
+      walFlushed
+      walApplied
+      sendTime
+      responseExpectation
 
 data XLogData
   = XLogData
