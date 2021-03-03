@@ -190,6 +190,27 @@ instance Serialize HotStandbyFeedback where
     currentEpoch <- getInt32be
     pure $ HotStandbyFeedback clientSendTime currentXmin currentEpoch
 
+data WalCopyData
+  = XLogDataM XLogData
+  | KeepAliveM PrimaryKeepAlive
+  deriving (Eq, Generic, Show)
+
+instance Serialize WalCopyData where
+  put (XLogDataM xLogData)   = put xLogData
+  put (KeepAliveM keepAlive) = put keepAlive
+  get = do
+    messageTypeFlag <- lookAhead $ getWord8
+    case messageTypeFlag of
+      -- 'w' XLogData
+      0x77 -> do
+        xLogData <- get
+        pure $ XLogDataM xLogData
+      -- 'k' PrimaryKeepAlive
+      0x6B -> do
+        keepAlive <- get
+        pure $ KeepAliveM keepAlive
+      _    -> fail "Unrecognized WalCopyData"
+
 consumeByteStringToEnd :: Get ByteString
 consumeByteStringToEnd = do
   numRemaining <- remaining
