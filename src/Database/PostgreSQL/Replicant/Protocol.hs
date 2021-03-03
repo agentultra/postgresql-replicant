@@ -79,7 +79,7 @@ startReplicationStream conn slotName systemLogPos = do
           case d of
             CopyOutRow row -> do
               print row
-              case decode @PrimaryKeepAlive row of
+              case decode @WalCopyData row of
                 Left err -> print err
                 Right m  -> putStrLn $ show m
             CopyOutError -> do
