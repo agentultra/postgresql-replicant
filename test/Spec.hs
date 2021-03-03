@@ -53,3 +53,16 @@ main = hspec $ do
         (decode . encode $ msg)
           `shouldBe`
           Right msg
+
+    describe "WalCopyData" $ do
+      it "should encode/decode an XLogData message" $ do
+        let msg = XLogDataM (XLogData 123 234 345 (B8.pack "hello"))
+        (decode . encode $ msg)
+          `shouldBe`
+          Right msg
+
+      it "should encode/decode a PrimaryKeepAlive message" $ do
+        let msg = KeepAliveM (PrimaryKeepAlive 123 346 ShouldRespond)
+        (decode . encode $ msg)
+          `shouldBe`
+          Right msg
