@@ -8,6 +8,8 @@ import Data.Word
 import GHC.Generics
 import GHC.Int
 
+import Database.PostgreSQL.Replicant.Serialize
+
 newtype Oid a = Oid Int
   deriving (Eq, Show)
 
@@ -210,9 +212,3 @@ instance Serialize WalCopyData where
         keepAlive <- get
         pure $ KeepAliveM keepAlive
       _    -> fail "Unrecognized WalCopyData"
-
-consumeByteStringToEnd :: Get ByteString
-consumeByteStringToEnd = do
-  numRemaining <- remaining
-  bs           <- getByteString numRemaining
-  pure $ bs
