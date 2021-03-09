@@ -1,7 +1,9 @@
 module Database.PostgreSQL.Replicant.Protocol where
 
 import Control.Monad (forever)
+import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
 import Data.Serialize
 import Database.PostgreSQL.LibPQ
@@ -81,7 +83,11 @@ startReplicationStream conn slotName systemLogPos = do
               print row
               case decode @WalCopyData row of
                 Left err -> print err
-                Right m  -> putStrLn $ show m
+                Right m  -> case m of
+                  XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
+                    Left err -> putStrLn err
+                    Right walLogData -> print walLogData
+                  KeepAliveM keepAlive -> print keepAlive
             CopyOutError -> do
               err <- errorMessage conn
               print err
