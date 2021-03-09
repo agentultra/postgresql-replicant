@@ -1,8 +1,11 @@
 module Database.PostgreSQL.Replicant.Message where
 
+import Control.Applicative
+import Control.Monad
 import Data.Aeson
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import Data.Scientific (Scientific)
 import Data.Serialize
 import Data.Text (Text)
 import Data.Word
@@ -93,9 +96,9 @@ instance Serialize StandbyStatusUpdate where
 data XLogData
   = XLogData
   { xLogDataWalStart :: Int64
-  , xLogDataWalEnd :: Int64
+  , xLogDataWalEnd   :: Int64
   , xLogDataSendTime :: Int64
-  , xLogdataWalData :: ByteString
+  , xLogDataWalData  :: ByteString
   }
   deriving (Eq, Generic, Show)
 
@@ -160,13 +163,178 @@ instance Serialize WalCopyData where
 
 -- WAL Log Data
 
-data Insert = Insert
+data WalValue
+  = WalString !Text
+  | WalNumber !Scientific
+  | WalBool !Bool
+  | WalNull
+  deriving (Eq, Generic, Show)
 
-data Update = Update
+instance FromJSON WalValue where
+  parseJSON (String txt) = pure $ WalString txt
+  parseJSON (Number num) = pure $ WalNumber num
+  parseJSON (Bool bool)  = pure $ WalBool bool
+  parseJSON Null         = pure WalNull
+  parseJSON _            = fail "Unrecognized WalValue"
 
-data Delete = Delete
+instance ToJSON WalValue where
+  toJSON (WalString txt) = String txt
+  toJSON (WalNumber n)   = Number n
+  toJSON (WalBool b)     = Bool b
+  toJSON (WalNull)       = Null
 
-data Message = Message
+data Column
+  = Column
+  { columnName  :: Text
+  , columnType  :: Text
+  , columnValue :: WalValue
+  }
+  deriving (Eq, Show)
+
+data ColumnParseError
+  = ColumnLengthMatchError
+  deriving (Eq, Show)
+
+-- | Some WAL output plugins encode column values in three, equal
+-- length, heterogeneous lists.
+columns :: [Text] -> [Text] -> [WalValue] -> Either ColumnParseError [Column]
+columns colNames colTypes colValues
+  | length colNames == length colTypes && length colTypes == length colValues
+  = Right (map toColumn $ zip3 colNames colTypes colValues)
+  | otherwise = Left ColumnLengthMatchError
+  where
+    toColumn (n, t, v) = Column n t v
+
+fromColumn :: Column -> (Text, Text, WalValue)
+fromColumn (Column cName cType cValue) = (cName, cType, cValue)
+
+fromColumns :: [Column] -> ([Text], [Text], [WalValue])
+fromColumns = unzip3 . map fromColumn
+
+data Insert
+  = Insert
+  { insertSchema  :: String
+  , insertTable   :: String
+  , insertColumns :: [Column]
+  }
+  deriving (Eq, Show)
+
+instance FromJSON Insert where
+  parseJSON = withObject "Insert" $ \o -> do
+    kind         <- o .: "kind"
+    unless (kind == String "insert") $ fail "Invalid insert"
+    schema       <- o .: "schema"
+    table        <- o .: "table"
+    columnNames  <- o .: "columnnames"
+    columnTypes  <- o .: "columntypes"
+    columnValues <- o .: "columnvalues"
+    case columns columnNames columnTypes columnValues of
+      Left err      -> fail $ show err
+      Right columns -> pure $ Insert schema table columns
+
+instance ToJSON Insert where
+  toJSON (Insert schema table columns) =
+    let (cNames, cTypes, cValues) = fromColumns columns
+    in object [ "kind"         .= String "insert"
+              , "schema"       .= schema
+              , "table"        .= table
+              , "columnnames"  .= cNames
+              , "columntypes"  .= cTypes
+              , "columnvalues" .= cValues
+              ]
+
+data Update
+  = Update
+  { updateSchema  :: Text
+  , updateTable   :: Text
+  , updateColumns :: [Column]
+  }
+  deriving (Eq, Show)
+
+instance FromJSON Update where
+  parseJSON = withObject "Insert" $ \o -> do
+    kind         <- o .: "kind"
+    unless (kind == String "update") $ fail "Invalid update"
+    schema       <- o .: "schema"
+    table        <- o .: "table"
+    columnNames  <- o .: "columnnames"
+    columnTypes  <- o .: "columntypes"
+    columnValues <- o .: "columnvalues"
+    case columns columnNames columnTypes columnValues of
+      Left err      -> fail $ show err
+      Right columns -> pure $ Update schema table columns
+
+instance ToJSON Update where
+  toJSON (Update schema table columns) =
+    let (cNames, cTypes, cValues) = fromColumns columns
+    in object [ "kind"         .= String "update"
+              , "schema"       .= schema
+              , "table"        .= table
+              , "columnnames"  .= cNames
+              , "columntypes"  .= cTypes
+              , "columnvalues" .= cValues
+              ]
+
+data Delete
+  = Delete
+  { deleteSchema  :: Text
+  , deleteTable   :: Text
+  , deleteColumns :: [Column]
+  }
+  deriving (Eq, Show)
+
+instance FromJSON Delete where
+  parseJSON = withObject "Delete" $ \o -> do
+    kind      <- o .: "kind"
+    unless (kind == String "delete") $ fail "Invalid delete"
+    schema    <- o .: "schema"
+    table     <- o .: "table"
+    oldKeys   <- o .: "oldkeys"
+    keyNames  <- oldKeys .: "keynames"
+    keyTypes  <- oldKeys .: "keytypes"
+    keyValues <- oldKeys .: "keyvalues"
+    case columns keyNames keyTypes keyValues of
+      Left err      -> fail $ show err
+      Right columns -> pure $ Delete schema table columns
+
+instance ToJSON Delete where
+  toJSON (Delete schema table columns) =
+    let (cNames, cTypes, cValues) = fromColumns columns
+    in object [ "kind"    .= String "delete"
+              , "schema"  .= schema
+              , "table"   .= table
+              , "oldkeys" .= object
+                [ "keynames"  .= cNames
+                , "keytypes"  .= cTypes
+                , "keyvalues" .= cValues
+                ]
+              ]
+
+data Message
+  = Message
+  { messageTransactional :: Bool
+  , messagePrefix        :: Text
+  , messageContent       :: Text
+  }
+  deriving (Eq, Show)
+
+instance FromJSON Message where
+  parseJSON = withObject "Message" $ \o -> do
+    kind          <- o .: "kind"
+    unless (kind == String "message") $ fail "Invalid message"
+    transactional <- o .: "transactional"
+    prefix        <- o .: "prefix"
+    content       <- o .: "content"
+    pure $ Message transactional prefix content
+
+instance ToJSON Message where
+  toJSON (Message transactional prefix content)
+    = object
+    [ "kind"          .= String "message"
+    , "transactional" .= transactional
+    , "prefix"        .= prefix
+    , "content"       .= content
+    ]
 
 data WalLogData
   = WInsert Insert
@@ -176,7 +344,16 @@ data WalLogData
   deriving (Eq, Generic, Show)
 
 instance ToJSON WalLogData where
-  toJSON = genericToJSON defaultOptions { sumEncoding = UntaggedObject }
+  toJSON = genericToJSON defaultOptions { sumEncoding = UntaggedValue }
 
 instance FromJSON WalLogData where
-  parseJSON = genericFromJSON defaultOptions { sumEncoding = UntaggedObject }
+  parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }
+
+newtype Change = Change [WalLogData]
+  deriving (Eq, Generic, Show)
+
+instance ToJSON Change where
+  toJSON (Change walLogData) = object [ "change" .= walLogData ]
+
+instance FromJSON Change where
+  parseJSON = withObject "Change" $ \o -> Change <$> o .: "change"
