@@ -1,5 +1,7 @@
 module Database.PostgreSQL.Replicant.Protocol where
 
+import Control.Concurrent
+import Control.Concurrent.Chan
 import Control.Monad (forever)
 import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
@@ -76,29 +78,48 @@ startReplicationStream conn slotName systemLogPos = do
     Just r  -> do
       status <- resultStatus r
       case status of
-        CopyBoth -> forever $ do
-          d <- getCopyData conn False
-          case d of
-            CopyOutRow row -> do
-              print row
-              case decode @WalCopyData row of
-                Left err -> print err
-                Right m  -> case m of
-                  XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
-                    Left err -> putStrLn err
-                    Right walLogData -> print walLogData
-                  KeepAliveM keepAlive -> print keepAlive
-            CopyOutError -> do
-              err <- errorMessage conn
-              print err
-              pure ()
-            CopyOutDone -> do
-              putStrLn "We should be finished with copying?"
-              pure ()
-            _ -> do
-              putStrLn "Unknown problem with getCopyData"
-              pure ()
-        _        -> do
+        CopyBoth -> do
+          keepAliveChan <- newChan
+          forkIO $ keepAliveHandler conn keepAliveChan
+          forever $ do
+            d <- getCopyData conn False
+            case d of
+              CopyOutRow row -> do
+                case decode @WalCopyData row of
+                  Left err -> print err
+                  Right m  -> case m of
+                    XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
+                      Left err -> putStrLn err
+                      Right walLogData -> print walLogData
+                    KeepAliveM keepAlive -> writeChan keepAliveChan keepAlive
+              CopyOutError -> do
+                err <- errorMessage conn
+                print err
+                pure ()
+              CopyOutDone -> do
+                putStrLn "We should be finished with copying?"
+                pure ()
+              _ -> do
+                putStrLn "Unknown problem with getCopyData"
+                pure ()
+        _ -> do
           err <- errorMessage conn
           print err
-          pure ()
+
+keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> IO ()
+keepAliveHandler conn msgs = forever $ do
+  keepAlive <- readChan msgs
+  case primaryKeepAliveResponseExpectation keepAlive of
+    DoNotRespond -> do
+      putStrLn "DoNotRespond"
+      threadDelay 1000
+    ShouldRespond -> do
+      let statusUpdate = HotStandbyFeedback 0 0 0
+      copyResult <- putCopyData conn $ encode statusUpdate
+      case copyResult of
+        CopyInOk -> do
+          putStrLn "CopyInOk!"
+        CopyInError -> do
+          err <- errorMessage conn
+          print err
+        CopyInWouldBlock -> putStrLn "Copy In Would Block!"
