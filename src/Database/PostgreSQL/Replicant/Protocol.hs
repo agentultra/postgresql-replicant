@@ -70,6 +70,41 @@ startReplicationCommand :: ByteString -> ByteString -> ByteString
 startReplicationCommand slotName systemLogPos =
   B.intercalate " " ["START_REPLICATION SLOT", slotName, "LOGICAL", systemLogPos]
 
+handleCopyOutData :: Chan PrimaryKeepAlive -> Connection -> IO ()
+handleCopyOutData chan conn = do
+  d <- getCopyData conn False
+  case d of
+    CopyOutRow row    -> handleReplicationRow chan conn row
+    CopyOutWouldBlock -> handleReplicationWouldBlock conn
+    CopyOutDone       -> handleReplicationDone conn
+    CopyOutError      -> handleReplicationError conn
+
+handleReplicationRow :: Chan PrimaryKeepAlive -> Connection -> ByteString -> IO ()
+handleReplicationRow keepAliveChan _ row =
+  case decode @WalCopyData row of
+    Left err -> print err
+    Right m  -> case m of
+      XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
+        Left err -> putStrLn err
+        Right walLogData -> print walLogData
+      KeepAliveM keepAlive -> writeChan keepAliveChan keepAlive
+
+handleReplicationWouldBlock :: Connection -> IO ()
+handleReplicationWouldBlock _ = do
+  putStrLn "What do here?"
+  pure ()
+
+handleReplicationDone :: Connection -> IO ()
+handleReplicationDone _ = do
+  putStrLn "We should be finished with copying?"
+  pure ()
+
+handleReplicationError :: Connection -> IO ()
+handleReplicationError conn = do
+  err <- errorMessage conn
+  print err
+  pure ()
+
 startReplicationStream :: Connection -> ByteString -> ByteString -> IO ()
 startReplicationStream conn slotName systemLogPos = do
   result <- exec conn $ startReplicationCommand slotName systemLogPos
@@ -81,27 +116,7 @@ startReplicationStream conn slotName systemLogPos = do
         CopyBoth -> do
           keepAliveChan <- newChan
           forkIO $ keepAliveHandler conn keepAliveChan
-          forever $ do
-            d <- getCopyData conn False
-            case d of
-              CopyOutRow row -> do
-                case decode @WalCopyData row of
-                  Left err -> print err
-                  Right m  -> case m of
-                    XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
-                      Left err -> putStrLn err
-                      Right walLogData -> print walLogData
-                    KeepAliveM keepAlive -> writeChan keepAliveChan keepAlive
-              CopyOutError -> do
-                err <- errorMessage conn
-                print err
-                pure ()
-              CopyOutDone -> do
-                putStrLn "We should be finished with copying?"
-                pure ()
-              _ -> do
-                putStrLn "Unknown problem with getCopyData"
-                pure ()
+          forever $ handleCopyOutData keepAliveChan conn
         _ -> do
           err <- errorMessage conn
           print err
