@@ -33,13 +33,14 @@ library:
   source-dirs: src
   dependencies:
   - aeson
-  - cereal
   - bytestring
+  - cereal
   - keep-alive
   - postgresql-libpq
   - scientific
   - stm
   - text
+  - time
 
 executables:
   replicant-example:

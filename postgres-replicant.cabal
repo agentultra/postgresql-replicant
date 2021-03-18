@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e8f6b27951c2185e0ce3b572c2e4b9f8dc96fdb4ca978a6b200103120d4ee459
+-- hash: 87500afdd8d49dd0c1346cc5fea08b94f1cd74af786bb771ef45837da3f4eb8f
 
 name:           postgres-replicant
 version:        0.1.0.0
@@ -29,6 +29,7 @@ source-repository head
 library
   exposed-modules:
       Database.PostgreSQL.Replicant.Message
+      Database.PostgreSQL.Replicant.PostgresUtils
       Database.PostgreSQL.Replicant.Protocol
       Database.PostgreSQL.Replicant.Serialize
       Lib
@@ -47,6 +48,7 @@ library
     , scientific
     , stm
     , text
+    , time
   default-language: Haskell2010
 
 executable replicant-example
