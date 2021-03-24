@@ -11,6 +11,9 @@ import Data.Serialize
 import Database.PostgreSQL.LibPQ
 
 import Database.PostgreSQL.Replicant.Message
+import Database.PostgreSQL.Replicant.PostgresUtils
+import Database.PostgreSQL.Replicant.State
+import Database.PostgreSQL.Replicant.Util
 
 data IdentifySystem
   = IdentifySystem
@@ -70,23 +73,25 @@ startReplicationCommand :: ByteString -> ByteString -> ByteString
 startReplicationCommand slotName systemLogPos =
   B.intercalate " " ["START_REPLICATION SLOT", slotName, "LOGICAL", systemLogPos]
 
-handleCopyOutData :: Chan PrimaryKeepAlive -> Connection -> IO ()
-handleCopyOutData chan conn = do
+handleCopyOutData :: Chan PrimaryKeepAlive -> WalProgressState -> Connection -> IO ()
+handleCopyOutData chan walState conn = do
   d <- getCopyData conn False
   case d of
-    CopyOutRow row    -> handleReplicationRow chan conn row
+    CopyOutRow row    -> handleReplicationRow chan walState conn row
     CopyOutWouldBlock -> handleReplicationWouldBlock conn
     CopyOutDone       -> handleReplicationDone conn
     CopyOutError      -> handleReplicationError conn
 
-handleReplicationRow :: Chan PrimaryKeepAlive -> Connection -> ByteString -> IO ()
-handleReplicationRow keepAliveChan _ row =
+handleReplicationRow :: Chan PrimaryKeepAlive -> WalProgressState -> Connection -> ByteString -> IO ()
+handleReplicationRow keepAliveChan walState _ row =
   case decode @WalCopyData row of
     Left err -> print err
     Right m  -> case m of
       XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
         Left err -> putStrLn err
-        Right walLogData -> print walLogData
+        Right walLogData -> do
+          _ <- updateWalProgress walState (mkInt64 . B.length $ (xLogDataWalData xlog))
+          print walLogData
       KeepAliveM keepAlive -> writeChan keepAliveChan keepAlive
 
 handleReplicationWouldBlock :: Connection -> IO ()
@@ -107,6 +112,8 @@ handleReplicationError conn = do
 
 startReplicationStream :: Connection -> ByteString -> ByteString -> IO ()
 startReplicationStream conn slotName systemLogPos = do
+  let initialWalProgress = WalProgress 0 0 0
+  walProgressState <- WalProgressState <$> newMVar initialWalProgress
   result <- exec conn $ startReplicationCommand slotName systemLogPos
   case result of
     Nothing -> putStrLn "Woopsie" >>= \_ -> pure ()
@@ -115,21 +122,30 @@ startReplicationStream conn slotName systemLogPos = do
       case status of
         CopyBoth -> do
           keepAliveChan <- newChan
-          forkIO $ keepAliveHandler conn keepAliveChan
-          forever $ handleCopyOutData keepAliveChan conn
+          forkIO $ keepAliveHandler conn keepAliveChan walProgressState
+          forever $ handleCopyOutData keepAliveChan walProgressState conn
         _ -> do
           err <- errorMessage conn
           print err
 
-keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> IO ()
-keepAliveHandler conn msgs = forever $ do
+keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> IO ()
+keepAliveHandler conn msgs (WalProgressState walState) = forever $ do
   keepAlive <- readChan msgs
+  (WalProgress received flushed applied) <- readMVar walState
   case primaryKeepAliveResponseExpectation keepAlive of
     DoNotRespond -> do
       putStrLn "DoNotRespond"
       threadDelay 1000
     ShouldRespond -> do
-      let statusUpdate = HotStandbyFeedback 0 0 0
+      timestamp <- postgresEpoch
+      let statusUpdate =
+            StandbyStatusUpdate
+            received
+            flushed
+            applied
+            timestamp
+            DoNotRespond
+      print $ "statusUpdate is " ++ show statusUpdate
       copyResult <- putCopyData conn $ encode statusUpdate
       case copyResult of
         CopyInOk -> do

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 87500afdd8d49dd0c1346cc5fea08b94f1cd74af786bb771ef45837da3f4eb8f
+-- hash: ee37a4a15bb00f0c4ec892ec300b79a7094630461ed6edbe554a948cbfecf1eb
 
 name:           postgres-replicant
 version:        0.1.0.0
@@ -32,6 +32,8 @@ library
       Database.PostgreSQL.Replicant.PostgresUtils
       Database.PostgreSQL.Replicant.Protocol
       Database.PostgreSQL.Replicant.Serialize
+      Database.PostgreSQL.Replicant.State
+      Database.PostgreSQL.Replicant.Util
       Lib
   other-modules:
       Paths_postgres_replicant
