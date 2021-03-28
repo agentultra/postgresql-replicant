@@ -24,9 +24,15 @@ You will also need a user who is
 [allowed](https://www.postgresql.org/docs/9.1/sql-alterrole.html
 "PostgreSQL user role documentation") to use replication features.
 
-### TODO: WAL Output Plugins
+Currently SSL is not supported but is high-priority.  It is
+recommended you turn `ssl = off` in your `postgresql.conf` settings
+until support is added.
 
-We may require something like `wal2json` or something to work.
+### WAL Output Plugins
+
+Presently we only support the `wal2json` WAL output plugin and only
+the v1 format.  Support for the v2 format is planned as are more
+output plugins.
 
 ## FAQ
 
