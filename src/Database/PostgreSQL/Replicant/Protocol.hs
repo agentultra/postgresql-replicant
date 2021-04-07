@@ -76,7 +76,7 @@ startReplicationCommand slotName systemLogPos =
   B.intercalate " " ["START_REPLICATION SLOT", slotName, "LOGICAL", systemLogPos]
 
 handleCopyOutData :: Chan PrimaryKeepAlive -> WalProgressState -> Connection -> IO ()
-handleCopyOutData chan walState conn = do
+handleCopyOutData chan walState conn = forever $ do
   d <- getCopyData conn False
   case d of
     CopyOutRow row    -> handleReplicationRow chan walState conn row
@@ -129,14 +129,17 @@ startReplicationStream conn slotName systemLogPos = do
       case status of
         CopyBoth -> do
           keepAliveChan <- newChan
-          forkIO $ keepAliveHandler conn keepAliveChan walProgressState
-          forever $ handleCopyOutData keepAliveChan walProgressState conn
+          kTid <- uninterruptibleMask_ $ forkIO $ keepAliveHandler conn keepAliveChan walProgressState `finally` cleanupKeepAliveHandler
+          hTid <- uninterruptibleMask_ $ forkIO $ handleCopyOutData keepAliveChan walProgressState conn `finally` cleanupHandleCopyOutData
+          killThread kTid
+          killThread hTid
         _ -> do
           err <- errorMessage conn
           print err
 
 keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> IO ()
 keepAliveHandler conn msgs (WalProgressState walState) = forever $ do
+  throwIO $ ReplicantException "SLKDFJLSKDJFLSKDJF"
   keepAlive <- readChan msgs
   (WalProgress received flushed applied) <- readMVar walState
   case primaryKeepAliveResponseExpectation keepAlive of
@@ -161,3 +164,13 @@ keepAliveHandler conn msgs (WalProgressState walState) = forever $ do
           err <- errorMessage conn
           print err
         CopyInWouldBlock -> putStrLn "Copy In Would Block!"
+
+cleanupKeepAliveHandler :: IO ()
+cleanupKeepAliveHandler = do
+  putStrLn "I should clean up resources and rethrow?"
+  throwIO (ReplicantException "keep alive thread failed")
+
+cleanupHandleCopyOutData :: IO ()
+cleanupHandleCopyOutData = do
+  putStrLn "cleanupHandleCopyOutData should clean up resources and rethrow?"
+  throwIO (ReplicantException "copy out data handler failed")
