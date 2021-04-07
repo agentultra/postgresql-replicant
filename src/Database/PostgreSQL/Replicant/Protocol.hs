@@ -2,12 +2,14 @@ module Database.PostgreSQL.Replicant.Protocol where
 
 import Control.Concurrent
 import Control.Concurrent.Chan
+import Control.Exception.Base
 import Control.Monad (forever)
 import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
 import Data.Serialize
+import Data.Typeable
 import Database.PostgreSQL.LibPQ
 
 import Database.PostgreSQL.Replicant.Message
@@ -104,10 +106,15 @@ handleReplicationDone _ = do
   putStrLn "We should be finished with copying?"
   pure ()
 
+data ReplicantException = ReplicantException String
+  deriving (Show, Typeable)
+
+instance Exception ReplicantException
+
 handleReplicationError :: Connection -> IO ()
 handleReplicationError conn = do
   err <- errorMessage conn
-  print err
+  throwIO (ReplicantException $ B.unpack . maybe "Unknown error" id $ err)
   pure ()
 
 startReplicationStream :: Connection -> ByteString -> ByteString -> IO ()
