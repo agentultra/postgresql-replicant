@@ -30,6 +30,8 @@ data IdentifySystem
 identifySystemCommand :: ByteString
 identifySystemCommand = "IDENTIFY_SYSTEM"
 
+-- | Synchronously execute the @IDENTIFY SYSTEM@ command which returns
+-- some basic system information about the server.
 identifySystemSync :: Connection -> IO (Maybe IdentifySystem)
 identifySystemSync conn = do
   result <- exec conn identifySystemCommand
@@ -57,6 +59,9 @@ createReplicationSlotCommand :: ByteString -> ByteString
 createReplicationSlotCommand slotName =
   B.intercalate " " ["CREATE_REPLICATION_SLOT", slotName, "LOGICAL wal2json"]
 
+-- | Create a replication slot using synchronous query execution.
+-- @Nothing@ means the command was unsuccessful and the slot was not
+-- created.
 createReplicationSlotSync :: Connection -> ByteString -> IO (Maybe ReplicationSlot)
 createReplicationSlotSync conn slotName = do
   result <- exec conn $ createReplicationSlotCommand slotName
@@ -76,6 +81,9 @@ startReplicationCommand :: ByteString -> ByteString -> ByteString
 startReplicationCommand slotName systemLogPos =
   B.intercalate " " ["START_REPLICATION SLOT", slotName, "LOGICAL", systemLogPos]
 
+-- | This thread handles the COPY OUT mode messages.  PostgreSQL uses
+-- this mode to copy the data from a WAL log file to the socket in the
+-- streaming replication protocol.
 handleCopyOutData :: Chan PrimaryKeepAlive -> WalProgressState -> Connection -> IO ()
 handleCopyOutData chan walState conn = forever $ do
   d <- getCopyData conn False
@@ -88,10 +96,16 @@ handleCopyOutData chan walState conn = forever $ do
 handleReplicationRow :: Chan PrimaryKeepAlive -> WalProgressState -> Connection -> ByteString -> IO ()
 handleReplicationRow keepAliveChan walState _ row =
   case decode @WalCopyData row of
-    Left err -> print err
+    Left err ->
+      throwIO
+      $ ReplicantException
+      $ "handleReplicationRow (decode error): " ++ err
     Right m  -> case m of
       XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
-        Left err -> putStrLn err
+        Left err ->
+          throwIO
+          $ ReplicantException
+          $ "handleReplicationRow (parse error): " ++ err
         Right walLogData -> do
           _ <- updateWalProgress walState (mkInt64 . B.length $ (xLogDataWalData xlog))
           print walLogData
@@ -112,12 +126,17 @@ data ReplicantException = ReplicantException String
 
 instance Exception ReplicantException
 
+-- | Used to re-throw an exception received from the server.
 handleReplicationError :: Connection -> IO ()
 handleReplicationError conn = do
   err <- errorMessage conn
   throwIO (ReplicantException $ B.unpack . maybe "Unknown error" id $ err)
   pure ()
 
+-- | Initiate the streaming replication protocol handler.  This will
+-- race the /keep-alive/ and /copy data/ handler threads.  It will
+-- catch and rethrow exceptions from either thread if any fails or
+-- returns.
 startReplicationStream :: Connection -> ByteString -> ByteString -> IO ()
 startReplicationStream conn slotName systemLogPos = do
   let initialWalProgress = WalProgress 0 0 0
@@ -140,9 +159,11 @@ startReplicationStream conn slotName systemLogPos = do
           err <- errorMessage conn
           print err
 
+-- | This thread listens on the channel for /primary keep-alive
+-- messages/ from the server and responds to them with the /update
+-- status/ message using the current WAL stream state.
 keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> IO ()
 keepAliveHandler conn msgs (WalProgressState walState) = forever $ do
-  throwIO $ ReplicantException "SLKDFJLSKDJFLSKDJF"
   keepAlive <- readChan msgs
   (WalProgress received flushed applied) <- readMVar walState
   case primaryKeepAliveResponseExpectation keepAlive of
