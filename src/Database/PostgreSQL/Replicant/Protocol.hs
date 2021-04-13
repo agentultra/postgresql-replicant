@@ -1,6 +1,7 @@
 module Database.PostgreSQL.Replicant.Protocol where
 
 import Control.Concurrent
+import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Exception.Base
 import Control.Monad (forever)
@@ -129,10 +130,12 @@ startReplicationStream conn slotName systemLogPos = do
       case status of
         CopyBoth -> do
           keepAliveChan <- newChan
-          kTid <- uninterruptibleMask_ $ forkIO $ keepAliveHandler conn keepAliveChan walProgressState `finally` cleanupKeepAliveHandler
-          hTid <- uninterruptibleMask_ $ forkIO $ handleCopyOutData keepAliveChan walProgressState conn `finally` cleanupHandleCopyOutData
-          killThread kTid
-          killThread hTid
+          race
+            (keepAliveHandler conn keepAliveChan walProgressState)
+            (handleCopyOutData keepAliveChan walProgressState conn)
+            `finally`
+            finish conn
+          return ()
         _ -> do
           err <- errorMessage conn
           print err
@@ -164,13 +167,3 @@ keepAliveHandler conn msgs (WalProgressState walState) = forever $ do
           err <- errorMessage conn
           print err
         CopyInWouldBlock -> putStrLn "Copy In Would Block!"
-
-cleanupKeepAliveHandler :: IO ()
-cleanupKeepAliveHandler = do
-  putStrLn "I should clean up resources and rethrow?"
-  throwIO (ReplicantException "keep alive thread failed")
-
-cleanupHandleCopyOutData :: IO ()
-cleanupHandleCopyOutData = do
-  putStrLn "cleanupHandleCopyOutData should clean up resources and rethrow?"
-  throwIO (ReplicantException "copy out data handler failed")

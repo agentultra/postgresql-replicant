@@ -33,6 +33,7 @@ library:
   source-dirs: src
   dependencies:
   - aeson
+  - async
   - bytestring
   - cereal
   - keep-alive
