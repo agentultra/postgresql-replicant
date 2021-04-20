@@ -2,12 +2,13 @@ module Database.PostgreSQL.Replicant.State where
 
 import Control.Concurrent
 import GHC.Int
+import Database.PostgreSQL.Replicant.Types.Lsn
 
 data WalProgress
   = WalProgress
-  { walProgressReceived :: Int64
-  , walProgressFlushed  :: Int64
-  , walProgressApplied  :: Int64
+  { walProgressReceived :: LSN
+  , walProgressFlushed  :: LSN
+  , walProgressApplied  :: LSN
   }
   deriving (Eq, Show)
 
@@ -17,7 +18,7 @@ updateWalProgress :: WalProgressState -> Int64 -> IO ()
 updateWalProgress (WalProgressState state) bytesReceived = do
   walProgress <- takeMVar state
   putMVar state
-    $ walProgress { walProgressReceived = walProgressReceived walProgress + bytesReceived
-                  , walProgressFlushed  = walProgressFlushed walProgress + bytesReceived
-                  , walProgressApplied  = walProgressApplied walProgress + bytesReceived
+    $ walProgress { walProgressReceived = walProgressReceived walProgress `add` bytesReceived
+                  , walProgressFlushed  = walProgressFlushed walProgress `add` bytesReceived
+                  , walProgressApplied  = walProgressApplied walProgress `add` bytesReceived
                   }
