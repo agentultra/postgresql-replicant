@@ -14,6 +14,7 @@ import GHC.Int
 
 import Database.PostgreSQL.Replicant.Serialize
 import Database.PostgreSQL.Replicant.PostgresUtils
+import Database.PostgreSQL.Replicant.Types.Lsn
 
 -- WAL Replication Stream messages
 
@@ -96,8 +97,8 @@ instance Serialize StandbyStatusUpdate where
 
 data XLogData
   = XLogData
-  { xLogDataWalStart :: Int64
-  , xLogDataWalEnd   :: Int64
+  { xLogDataWalStart :: LSN
+  , xLogDataWalEnd   :: LSN
   , xLogDataSendTime :: Int64
   , xLogDataWalData  :: ByteString
   }
@@ -106,15 +107,15 @@ data XLogData
 instance Serialize XLogData where
   put (XLogData walStart walEnd sendTime walData) = do
     putWord8 0x77 -- 'w'
-    putInt64be walStart
-    putInt64be walEnd
+    put walStart
+    put walEnd
     putInt64be sendTime
     putByteString walData
 
   get = do
     _ <- getBytes 1 -- should expec '0x77', 'w'
-    walStart <- getInt64be
-    walEnd   <- getInt64be
+    walStart <- get
+    walEnd   <- get
     sendTime <- getInt64be
     walData  <- consumeByteStringToEnd
     pure $ XLogData walStart walEnd sendTime walData
