@@ -13,6 +13,7 @@ import GHC.Generics
 import GHC.Int
 
 import Database.PostgreSQL.Replicant.Serialize
+import Database.PostgreSQL.Replicant.PostgresUtils
 
 -- WAL Replication Stream messages
 
@@ -56,9 +57,9 @@ instance Serialize PrimaryKeepAlive where
 
 data StandbyStatusUpdate
   = StandbyStatusUpdate
-  { standbyStatuUpdateLastWalByteReceived  :: Int64
-  , standbyStatusUpdateLastWalByteFlushed  :: Int64
-  , standbyStatusUpdateLastWalByteApplied  :: Int64
+  { standbyStatuUpdateLastWalByteReceived  :: LSN
+  , standbyStatusUpdateLastWalByteFlushed  :: LSN
+  , standbyStatusUpdateLastWalByteApplied  :: LSN
   , standbyStatusUpdateSendTime            :: Int64
   , standbyStatusUpdateResponseExpectation :: ResponseExpectation
   }
@@ -72,17 +73,17 @@ instance Serialize StandbyStatusUpdate where
        sendTime
        responseExpectation) = do
     putWord8 0x72 -- 'r'
-    putInt64be walReceived
-    putInt64be walFlushed
-    putInt64be walApplied
+    put walReceived
+    put walFlushed
+    put walApplied
     putInt64be sendTime
     put responseExpectation
 
   get = do
     _ <- getBytes 1 -- should expect 0x72, 'r'
-    walReceived         <- getInt64be
-    walFlushed          <- getInt64be
-    walApplied          <- getInt64be
+    walReceived         <- get
+    walFlushed          <- get
+    walApplied          <- get
     sendTime            <- getInt64be
     responseExpectation <- get
     pure $
