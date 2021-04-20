@@ -1,5 +1,6 @@
 module Main where
 
+import Control.Exception
 import Database.PostgreSQL.LibPQ
 import Database.PostgreSQL.Replicant.Protocol
 
@@ -15,3 +16,7 @@ main = do
         Nothing -> error "Error creating replication slot"
         Just repSlot ->
           startReplicationStream c (replicationSlotName repSlot) (identifySystemLogPos info)
+          `catch`
+          \exc -> do
+            putStrLn "Something bad happened: "
+            print @SomeException exc

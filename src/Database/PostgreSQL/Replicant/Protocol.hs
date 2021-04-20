@@ -152,8 +152,10 @@ startReplicationStream conn slotName systemLogPos = do
           race
             (keepAliveHandler conn keepAliveChan walProgressState)
             (handleCopyOutData keepAliveChan walProgressState conn)
-            `finally`
-            finish conn
+            `catch`
+            \exc -> do
+              finish conn
+              throwIO @SomeException exc
           return ()
         _ -> do
           err <- errorMessage conn
