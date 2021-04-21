@@ -36,9 +36,9 @@ instance Serialize ResponseExpectation where
 
 data PrimaryKeepAlive
   = PrimaryKeepAlive
-  { primaryKeepAliveWalEnd              :: Int64
-  , primaryKeepAliveSendTime            :: Int64
-  , primaryKeepAliveResponseExpectation :: ResponseExpectation
+  { primaryKeepAliveWalEnd              :: !Int64
+  , primaryKeepAliveSendTime            :: !Int64
+  , primaryKeepAliveResponseExpectation :: !ResponseExpectation
   }
   deriving (Eq, Generic, Show)
 
@@ -58,11 +58,11 @@ instance Serialize PrimaryKeepAlive where
 
 data StandbyStatusUpdate
   = StandbyStatusUpdate
-  { standbyStatuUpdateLastWalByteReceived  :: LSN
-  , standbyStatusUpdateLastWalByteFlushed  :: LSN
-  , standbyStatusUpdateLastWalByteApplied  :: LSN
-  , standbyStatusUpdateSendTime            :: Int64
-  , standbyStatusUpdateResponseExpectation :: ResponseExpectation
+  { standbyStatuUpdateLastWalByteReceived  :: !LSN
+  , standbyStatusUpdateLastWalByteFlushed  :: !LSN
+  , standbyStatusUpdateLastWalByteApplied  :: !LSN
+  , standbyStatusUpdateSendTime            :: !Int64
+  , standbyStatusUpdateResponseExpectation :: !ResponseExpectation
   }
   deriving (Eq, Generic, Show)
 
@@ -97,10 +97,10 @@ instance Serialize StandbyStatusUpdate where
 
 data XLogData
   = XLogData
-  { xLogDataWalStart :: LSN
-  , xLogDataWalEnd   :: LSN
-  , xLogDataSendTime :: Int64
-  , xLogDataWalData  :: ByteString
+  { xLogDataWalStart :: !LSN
+  , xLogDataWalEnd   :: !LSN
+  , xLogDataSendTime :: !Int64
+  , xLogDataWalData  :: !ByteString
   }
   deriving (Eq, Generic, Show)
 
@@ -122,9 +122,9 @@ instance Serialize XLogData where
 
 data HotStandbyFeedback
   = HotStandbyFeedback
-  { hotStandbyFeedbackClientSendTime :: Int64
-  , hotStandbyFeedbackCurrentXmin    :: Int32
-  , hotStandbyFeedbackCurrentEpoch   :: Int32
+  { hotStandbyFeedbackClientSendTime :: !Int64
+  , hotStandbyFeedbackCurrentXmin    :: !Int32
+  , hotStandbyFeedbackCurrentEpoch   :: !Int32
   }
   deriving (Eq, Generic, Show)
 
@@ -143,8 +143,8 @@ instance Serialize HotStandbyFeedback where
     pure $ HotStandbyFeedback clientSendTime currentXmin currentEpoch
 
 data WalCopyData
-  = XLogDataM XLogData
-  | KeepAliveM PrimaryKeepAlive
+  = XLogDataM !XLogData
+  | KeepAliveM !PrimaryKeepAlive
   deriving (Eq, Generic, Show)
 
 instance Serialize WalCopyData where
@@ -187,9 +187,9 @@ instance ToJSON WalValue where
 
 data Column
   = Column
-  { columnName  :: Text
-  , columnType  :: Text
-  , columnValue :: WalValue
+  { columnName  :: !Text
+  , columnType  :: !Text
+  , columnValue :: !WalValue
   }
   deriving (Eq, Show)
 
@@ -215,9 +215,9 @@ fromColumns = unzip3 . map fromColumn
 
 data Insert
   = Insert
-  { insertSchema  :: String
-  , insertTable   :: String
-  , insertColumns :: [Column]
+  { insertSchema  :: !String
+  , insertTable   :: !String
+  , insertColumns :: ![Column]
   }
   deriving (Eq, Show)
 
@@ -247,9 +247,9 @@ instance ToJSON Insert where
 
 data Update
   = Update
-  { updateSchema  :: Text
-  , updateTable   :: Text
-  , updateColumns :: [Column]
+  { updateSchema  :: !Text
+  , updateTable   :: !Text
+  , updateColumns :: ![Column]
   }
   deriving (Eq, Show)
 
@@ -279,9 +279,9 @@ instance ToJSON Update where
 
 data Delete
   = Delete
-  { deleteSchema  :: Text
-  , deleteTable   :: Text
-  , deleteColumns :: [Column]
+  { deleteSchema  :: !Text
+  , deleteTable   :: !Text
+  , deleteColumns :: ![Column]
   }
   deriving (Eq, Show)
 
@@ -314,9 +314,9 @@ instance ToJSON Delete where
 
 data Message
   = Message
-  { messageTransactional :: Bool
-  , messagePrefix        :: Text
-  , messageContent       :: Text
+  { messageTransactional :: !Bool
+  , messagePrefix        :: !Text
+  , messageContent       :: !Text
   }
   deriving (Eq, Show)
 
@@ -339,10 +339,10 @@ instance ToJSON Message where
     ]
 
 data WalLogData
-  = WInsert Insert
-  | WUpdate Update
-  | WDelete Delete
-  | WMessage Message
+  = WInsert !Insert
+  | WUpdate !Update
+  | WDelete !Delete
+  | WMessage !Message
   deriving (Eq, Generic, Show)
 
 instance ToJSON WalLogData where
