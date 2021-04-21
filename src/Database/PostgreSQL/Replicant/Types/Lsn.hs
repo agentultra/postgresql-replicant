@@ -1,7 +1,12 @@
 module Database.PostgreSQL.Replicant.Types.Lsn where
 
+import Data.Attoparsec.ByteString.Char8
 import Data.Bits
 import Data.Bits.Extras
+import Data.ByteString (ByteString ())
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Builder as Builder
+import Data.ByteString.Lazy.Builder.ASCII (word32Hex, word32HexFixed)
 import Data.Serialize
 import Data.Word
 import GHC.Int
@@ -39,6 +44,15 @@ fromInt64 x =
       hi = fromIntegral . w32 $ mask .&. fromIntegral x
       lo = fromIntegral $ x `shiftR` 32
   in LSN lo hi
+
+lsnParser :: Parser LSN
+lsnParser = LSN <$> (hexadecimal <* char '/') <*> hexadecimal
+
+fromByteString :: ByteString -> Either String LSN
+fromByteString = parseOnly lsnParser
+
+toByteString :: LSN -> ByteString
+toByteString (LSN filepart off) = BL.toStrict $ Builder.toLazyByteString (word32Hex (fromIntegral filepart) <> Builder.char7 '/' <> word32Hex (fromIntegral off))
 
 -- | Add a number of bytes from an LSN
 add :: LSN -> Int64 -> LSN

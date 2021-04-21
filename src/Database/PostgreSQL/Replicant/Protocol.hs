@@ -23,7 +23,7 @@ data IdentifySystem
   = IdentifySystem
   { identifySystemSytemId  :: ByteString
   , identifySystemTimeline :: ByteString
-  , identifySystemLogPos   :: ByteString
+  , identifySystemLogPos   :: LSN
   , identifySystemDbName   :: Maybe ByteString
   }
   deriving (Eq, Show)
@@ -44,7 +44,11 @@ identifySystemSync conn = do
       logpos   <- getvalue' r (toRow 0) (toColumn 2)
       dbname   <- getvalue' r (toRow 0) (toColumn 3)
       case (systemId, timeline, logpos, dbname) of
-        (Just s, Just t, Just l, d) -> pure $ Just (IdentifySystem s t l d)
+        (Just s, Just t, Just l, d) -> do
+          case fromByteString l of
+            Left _ -> pure Nothing
+            Right logPosLsn ->
+              pure $ Just (IdentifySystem s t logPosLsn d)
         _ -> pure Nothing
 
 data ReplicationSlot =
@@ -78,9 +82,9 @@ createReplicationSlotSync conn slotName = do
           pure $ Just (ReplicationSlot s c sn op)
         _ -> pure Nothing
 
-startReplicationCommand :: ByteString -> ByteString -> ByteString
+startReplicationCommand :: ByteString -> LSN -> ByteString
 startReplicationCommand slotName systemLogPos =
-  B.intercalate " " ["START_REPLICATION SLOT", slotName, "LOGICAL", systemLogPos]
+  B.intercalate " " ["START_REPLICATION SLOT", slotName, "LOGICAL", (toByteString systemLogPos)]
 
 -- | This thread handles the COPY OUT mode messages.  PostgreSQL uses
 -- this mode to copy the data from a WAL log file to the socket in the
@@ -141,9 +145,9 @@ handleReplicationError conn = do
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
 -- catch and rethrow exceptions from either thread if any fails or
 -- returns.
-startReplicationStream :: Connection -> ByteString -> ByteString -> IO ()
+startReplicationStream :: Connection -> ByteString -> LSN -> IO ()
 startReplicationStream conn slotName systemLogPos = do
-  let initialWalProgress = WalProgress (fromInt64 0) (fromInt64 0) (fromInt64 0)
+  let initialWalProgress = WalProgress systemLogPos (fromInt64 0) (fromInt64 0)
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
   result <- exec conn $ startReplicationCommand slotName systemLogPos
   case result of

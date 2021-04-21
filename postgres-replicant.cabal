@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a5f29d8565acef75b7363fa2ab8436a4c4afde30b7b9eefe9ab593f7b56bec20
+-- hash: 7827bc4ee6a29bf028b76f7a6494603382d7b2db2ad27cb91894b0666a1ae7e5
 
 name:           postgres-replicant
 version:        0.1.0.0
@@ -44,6 +44,7 @@ library
   build-depends:
       aeson
     , async
+    , attoparsec
     , base >=4.7 && <5
     , bits
     , bytestring

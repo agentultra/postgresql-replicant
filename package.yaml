@@ -33,6 +33,7 @@ library:
   source-dirs: src
   dependencies:
   - aeson
+  - attoparsec
   - async
   - bits
   - bytestring
