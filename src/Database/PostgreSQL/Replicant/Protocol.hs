@@ -17,6 +17,7 @@ import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.State
 import Database.PostgreSQL.Replicant.Util
+import Database.PostgreSQL.Replicant.Types.Lsn
 
 data IdentifySystem
   = IdentifySystem
@@ -107,8 +108,8 @@ handleReplicationRow keepAliveChan walState _ row =
           $ ReplicantException
           $ "handleReplicationRow (parse error): " ++ err
         Right walLogData -> do
-          let logStart      = xLogDataWalStart walLogData
-              logEnd        = xLogDataWalEnd walLogData
+          let logStart      = xLogDataWalStart xlog
+              logEnd        = xLogDataWalEnd xlog
               bytesReceived = logEnd `subLsn` logStart
           _ <- updateWalProgress walState bytesReceived
           print walLogData
@@ -142,7 +143,7 @@ handleReplicationError conn = do
 -- returns.
 startReplicationStream :: Connection -> ByteString -> ByteString -> IO ()
 startReplicationStream conn slotName systemLogPos = do
-  let initialWalProgress = WalProgress 0 0 0
+  let initialWalProgress = WalProgress (fromInt64 0) (fromInt64 0) (fromInt64 0)
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
   result <- exec conn $ startReplicationCommand slotName systemLogPos
   case result of

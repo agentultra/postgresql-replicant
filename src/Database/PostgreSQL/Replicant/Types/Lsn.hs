@@ -1,6 +1,7 @@
 module Database.PostgreSQL.Replicant.Types.Lsn where
 
 import Data.Bits
+import Data.Bits.Extras
 import Data.Serialize
 import Data.Word
 import GHC.Int
@@ -18,31 +19,34 @@ instance Ord LSN where
     | otherwise = EQ
 
 instance Serialize LSN where
-  put (LSN filePart offSet) = do
-    putInt32be filePart
-    putWord8 0x2f -- '/' in ascii
-    putInt32be offSet
+  put lsn = do
+    putInt64be (toInt64 lsn)
 
   get = do
-    filePart <- getInt32be
-    skip 1
-    LSN filePart <$> getInt32be
+    i <- getInt64be
+    pure $ fromInt64 i
 
 -- | Convert an LSN to a 64-bit integer
 toInt64 :: LSN -> Int64
-toInt64 (LSN lo hi) = undefined
+toInt64 (LSN lo hi) =
+  let r = w64 lo `shiftL` 32
+  in fromIntegral $ r .|. fromIntegral hi
 
 -- | Convert a 64-bit integer to an LSN
-int64ToLSN :: Int64 -> LSN
-int64ToLSN = undefined
+fromInt64 :: Int64 -> LSN
+fromInt64 x =
+  let mask = w64 $ maxBound @Word32
+      hi = fromIntegral . w32 $ mask .&. fromIntegral x
+      lo = fromIntegral $ x `shiftR` 32
+  in LSN lo hi
 
 -- | Add a number of bytes from an LSN
-add :: Int64 -> LSN -> LSN
-add bytes = int64ToLSN . (+ bytes) . toInt64
+add :: LSN -> Int64 -> LSN
+add lsn bytes = fromInt64 . (+ bytes) . toInt64 $ lsn
 
 -- | Subtract a number of bytes from an LSN
-sub :: Int64 -> LSN -> LSN
-sub bytes = int64ToLSN . flip (-) bytes . toInt64
+sub :: LSN -> Int64 -> LSN
+sub lsn bytes = fromInt64 . flip (-) bytes . toInt64 $ lsn
 
 -- | Subtract two LSN's to calculate the difference of bytes between
 -- them.

@@ -8,13 +8,14 @@ import Data.Word
 import GHC.Int
 
 import Database.PostgreSQL.Replicant.Message
+import Database.PostgreSQL.Replicant.Types.Lsn
 
 examplePrimaryKeepAliveMessage :: ByteString
 examplePrimaryKeepAliveMessage
   = B.concat
     [ (B.pack [0x6B])
-    , (encode @Int64 123)
-    , (encode @Int64 346)
+    , (encode @LSN (fromInt64 123))
+    , (encode @LSN (fromInt64 346))
     , (encode @Word8 1)
     ]
 
@@ -29,20 +30,25 @@ main = hspec $ do
 
     describe "StandbyStatusUpdate" $ do
       it "should encode a valid standby status update message" $ do
-        (encode $ StandbyStatusUpdate 213 232 234 454 DoNotRespond)
+        (encode $ StandbyStatusUpdate
+         (fromInt64 213)
+         (fromInt64 232)
+         (fromInt64 234)
+         454
+         DoNotRespond)
           `shouldBe`
           B.concat
           [ B.pack [0x72]
-          , encode @Int64 213
-          , encode @Int64 232
-          , encode @Int64 234
+          , encode @LSN (fromInt64 213)
+          , encode @LSN (fromInt64 232)
+          , encode @LSN (fromInt64 234)
           , encode @Int64 454
           , encode @Word8 0
           ]
 
     describe "XLogData" $ do
       it "should encode/decode a valid xLogData message" $ do
-        let msg = XLogData 123 234 345 (B8.pack "hello")
+        let msg = XLogData (fromInt64 123) (fromInt64 234) 345 (B8.pack "hello")
         (decode . encode $ msg)
           `shouldBe`
           Right msg
@@ -56,7 +62,7 @@ main = hspec $ do
 
     describe "WalCopyData" $ do
       it "should encode/decode an XLogData message" $ do
-        let msg = XLogDataM (XLogData 123 234 345 (B8.pack "hello"))
+        let msg = XLogDataM (XLogData (fromInt64 123) (fromInt64 234) 345 (B8.pack "hello"))
         (decode . encode $ msg)
           `shouldBe`
           Right msg
@@ -66,3 +72,13 @@ main = hspec $ do
         (decode . encode $ msg)
           `shouldBe`
           Right msg
+
+  context "Types" $ do
+    describe "LSN" $ do
+      it "should be convertible to Int64" $ do
+        let lsn = LSN 2 23
+        (fromInt64 . toInt64 $ lsn) `shouldBe` lsn
+
+      fit "should be serializable" $ do
+        let lsn = LSN 2 23
+        (decode . encode $ lsn) `shouldBe` Right lsn
