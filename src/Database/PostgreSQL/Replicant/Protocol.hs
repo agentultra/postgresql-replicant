@@ -89,17 +89,28 @@ startReplicationCommand slotName systemLogPos =
 -- | This thread handles the COPY OUT mode messages.  PostgreSQL uses
 -- this mode to copy the data from a WAL log file to the socket in the
 -- streaming replication protocol.
-handleCopyOutData :: Chan PrimaryKeepAlive -> WalProgressState -> Connection -> IO ()
-handleCopyOutData chan walState conn = forever $ do
+handleCopyOutData
+  :: Chan PrimaryKeepAlive
+  -> WalProgressState
+  -> Connection
+  -> (Change -> IO a)
+  -> IO ()
+handleCopyOutData chan walState conn cb = forever $ do
   d <- getCopyData conn False
   case d of
-    CopyOutRow row    -> handleReplicationRow chan walState conn row
+    CopyOutRow row    -> handleReplicationRow chan walState conn row cb
     CopyOutWouldBlock -> handleReplicationWouldBlock conn
     CopyOutDone       -> handleReplicationDone conn
     CopyOutError      -> handleReplicationError conn
 
-handleReplicationRow :: Chan PrimaryKeepAlive -> WalProgressState -> Connection -> ByteString -> IO ()
-handleReplicationRow keepAliveChan walState _ row =
+handleReplicationRow
+  :: Chan PrimaryKeepAlive
+  -> WalProgressState
+  -> Connection
+  -> ByteString
+  -> (Change -> IO a)
+  -> IO ()
+handleReplicationRow keepAliveChan walState _ row cb =
   case decode @WalCopyData row of
     Left err ->
       throwIO
@@ -116,7 +127,8 @@ handleReplicationRow keepAliveChan walState _ row =
               logEnd        = xLogDataWalEnd xlog
               bytesReceived = logEnd `subLsn` logStart
           _ <- updateWalProgress walState bytesReceived
-          print walLogData
+          _ <- cb walLogData
+          pure ()
       KeepAliveM keepAlive -> writeChan keepAliveChan keepAlive
 
 handleReplicationWouldBlock :: Connection -> IO ()
@@ -145,8 +157,8 @@ handleReplicationError conn = do
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
 -- catch and rethrow exceptions from either thread if any fails or
 -- returns.
-startReplicationStream :: Connection -> ByteString -> LSN -> IO ()
-startReplicationStream conn slotName systemLogPos = do
+startReplicationStream :: Connection -> ByteString -> LSN -> (Change -> IO a) -> IO ()
+startReplicationStream conn slotName systemLogPos cb = do
   let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
   result <- exec conn $ startReplicationCommand slotName systemLogPos
@@ -159,7 +171,7 @@ startReplicationStream conn slotName systemLogPos = do
           keepAliveChan <- newChan
           race
             (keepAliveHandler conn keepAliveChan walProgressState)
-            (handleCopyOutData keepAliveChan walProgressState conn)
+            (handleCopyOutData keepAliveChan walProgressState conn cb)
             `catch`
             \exc -> do
               finish conn

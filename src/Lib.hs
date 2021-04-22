@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module Lib
     ( withConnection
+    , PgSettings (..)
     ) where
 
 import Control.Concurrent
@@ -15,6 +16,7 @@ import Network.Socket.KeepAlive
 import System.Posix.Types
 
 import Database.PostgreSQL.Replicant.Protocol
+import Database.PostgreSQL.Replicant.Message
 
 data PgSettings
   = PgSettings
@@ -35,8 +37,8 @@ pgConnectionString PgSettings {..} = B.intercalate " "
   , "replication=database"
   ]
 
-withConnection :: PgSettings -> IO ()
-withConnection settings = do
+withConnection :: PgSettings -> (Change -> IO a) -> IO ()
+withConnection settings cb = do
   conn <- connectStart $ pgConnectionString settings
   mFd <- socket conn
   let sockFd = fromMaybe (error "Failed getting socket file descriptor") mFd
@@ -47,7 +49,7 @@ withConnection settings = do
       putStrLn "Connection ready!"
       (Just info) <- identifySystemSync conn
       (Just repSlot) <- createReplicationSlotSync conn $ B.pack . pgSlotName $ settings
-      startReplicationStream conn (replicationSlotName repSlot) (identifySystemLogPos info)
+      startReplicationStream conn (replicationSlotName repSlot) (identifySystemLogPos info) cb
       pure ()
 
   where
