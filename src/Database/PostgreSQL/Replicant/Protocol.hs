@@ -147,7 +147,7 @@ handleReplicationError conn = do
 -- returns.
 startReplicationStream :: Connection -> ByteString -> LSN -> IO ()
 startReplicationStream conn slotName systemLogPos = do
-  let initialWalProgress = WalProgress systemLogPos (fromInt64 0) (fromInt64 0)
+  let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
   result <- exec conn $ startReplicationCommand slotName systemLogPos
   case result of
