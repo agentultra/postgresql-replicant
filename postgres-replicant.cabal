@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 81704099aef7f7ce93ffb6555144d311e21b406a21a0cf0316db54b18dfaafd4
+-- hash: 24896038cf3a284b7e15939053c0de19d2c66f102240014da0c89720e1492fab
 
 name:           postgres-replicant
 version:        0.1.0.0
@@ -49,6 +49,7 @@ library
     , bits
     , bytestring
     , cereal
+    , containers
     , keep-alive
     , postgresql-libpq
     , scientific

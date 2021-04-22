@@ -38,6 +38,7 @@ library:
   - bits
   - bytestring
   - cereal
+  - containers
   - keep-alive
   - postgresql-libpq
   - scientific

@@ -4,11 +4,13 @@ import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Exception.Base
-import Control.Monad (forever)
+import Control.Monad (forever, when)
 import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
+import Data.Sequence (Seq, ViewL (..), (<|))
+import qualified Data.Sequence as S
 import Data.Serialize
 import Data.Typeable
 import Database.PostgreSQL.LibPQ
@@ -169,8 +171,9 @@ startReplicationStream conn slotName systemLogPos cb = do
       case status of
         CopyBoth -> do
           keepAliveChan <- newChan
+          statusUpdateQueue <- newMVar S.empty
           race
-            (keepAliveHandler conn keepAliveChan walProgressState)
+            (keepAliveHandler conn keepAliveChan walProgressState statusUpdateQueue)
             (handleCopyOutData keepAliveChan walProgressState conn cb)
             `catch`
             \exc -> do
@@ -184,8 +187,10 @@ startReplicationStream conn slotName systemLogPos cb = do
 -- | This thread listens on the channel for /primary keep-alive
 -- messages/ from the server and responds to them with the /update
 -- status/ message using the current WAL stream state.
-keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> IO ()
-keepAliveHandler conn msgs (WalProgressState walState) = forever $ do
+keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> MVar (Seq StandbyStatusUpdate) -> IO ()
+keepAliveHandler conn msgs (WalProgressState walState) statusUpdateQueue = forever $ do
+  queue <- readMVar statusUpdateQueue
+  when (not (S.null queue)) $ sendQueuedUpdates conn statusUpdateQueue
   keepAlive <- readChan msgs
   (WalProgress received flushed applied) <- readMVar walState
   case primaryKeepAliveResponseExpectation keepAlive of
@@ -209,4 +214,32 @@ keepAliveHandler conn msgs (WalProgressState walState) = forever $ do
         CopyInError -> do
           err <- errorMessage conn
           print err
-        CopyInWouldBlock -> putStrLn "Copy In Would Block!"
+        CopyInWouldBlock -> do
+          queue <- takeMVar statusUpdateQueue
+          putMVar statusUpdateQueue $ statusUpdate <| queue
+          threadDelay 500
+
+-- | Drain the queue of StandbyStatusUpdates and send them to the
+-- server.  Keep retrying (with delay) until the queue is empty.
+--
+-- The queue should be non-empty and this operation could block.
+sendQueuedUpdates :: Connection -> MVar (Seq StandbyStatusUpdate) -> IO ()
+sendQueuedUpdates conn statusUpdateQueue = do
+  queue <- takeMVar statusUpdateQueue
+  case S.viewl queue of
+    EmptyL -> putMVar statusUpdateQueue $ S.empty
+    update :< rest -> do
+      copyResult <- putCopyData conn $ encode update
+      case copyResult of
+        CopyInOk -> do
+          putMVar statusUpdateQueue rest
+          threadDelay 500
+          sendQueuedUpdates conn statusUpdateQueue
+        CopyInError -> do
+          err <- maybe "sendQueuedUpdates: unknown error" id <$> errorMessage conn
+          throwIO $ ReplicantException $ B.unpack err
+        CopyInWouldBlock -> do
+          queue <- takeMVar statusUpdateQueue
+          putMVar statusUpdateQueue $ update <| rest
+          threadDelay 500
+          sendQueuedUpdates conn statusUpdateQueue
