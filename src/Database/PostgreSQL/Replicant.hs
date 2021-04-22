@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
-module Lib
-    ( withConnection
+module Database.PostgreSQL.Replicant
+    ( withLogicalStream
     , PgSettings (..)
     ) where
 
@@ -37,8 +37,8 @@ pgConnectionString PgSettings {..} = B.intercalate " "
   , "replication=database"
   ]
 
-withConnection :: PgSettings -> (Change -> IO a) -> IO ()
-withConnection settings cb = do
+withLogicalStream :: PgSettings -> (Change -> IO a) -> IO ()
+withLogicalStream settings cb = do
   conn <- connectStart $ pgConnectionString settings
   mFd <- socket conn
   let sockFd = fromMaybe (error "Failed getting socket file descriptor") mFd
