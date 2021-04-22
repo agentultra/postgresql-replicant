@@ -75,10 +75,11 @@ main = hspec $ do
 
   context "Types" $ do
     describe "LSN" $ do
-      it "should be convertible to Int64" $ do
-        let lsn = LSN 2 23
-        (fromInt64 . toInt64 $ lsn) `shouldBe` lsn
+      context "Serializable" $ do
+        it "should be serializable" $ do
+          let lsn = LSN 2 23
+          (decode . encode $ lsn) `shouldBe` Right lsn
 
-      fit "should be serializable" $ do
-        let lsn = LSN 2 23
-        (decode . encode $ lsn) `shouldBe` Right lsn
+        it "should be equivalent to fromByteString/toByteString" $ do
+          let (Right lsn) = fromByteString "16/3002D50"
+          (toByteString <$> (decode . encode @LSN $ lsn)) `shouldBe` Right "16/3002d50"

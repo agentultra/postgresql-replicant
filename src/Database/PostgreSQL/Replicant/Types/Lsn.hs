@@ -33,17 +33,17 @@ instance Serialize LSN where
 
 -- | Convert an LSN to a 64-bit integer
 toInt64 :: LSN -> Int64
-toInt64 (LSN lo hi) =
-  let r = w64 lo `shiftL` 32
-  in fromIntegral $ r .|. fromIntegral hi
+toInt64 (LSN filePart offSet) =
+  let r = w64 filePart `shiftL` 32
+  in fromIntegral $ r .|. fromIntegral offSet
 
 -- | Convert a 64-bit integer to an LSN
 fromInt64 :: Int64 -> LSN
 fromInt64 x =
   let mask = w64 $ maxBound @Word32
-      hi = fromIntegral . w32 $ mask .&. fromIntegral x
-      lo = fromIntegral $ x `shiftR` 32
-  in LSN lo hi
+      offSet = fromIntegral . w32 $ mask .&. fromIntegral x
+      filePart = fromIntegral $ x `shiftR` 32
+  in LSN filePart offSet
 
 lsnParser :: Parser LSN
 lsnParser = LSN <$> (hexadecimal <* char '/') <*> hexadecimal
@@ -51,10 +51,18 @@ lsnParser = LSN <$> (hexadecimal <* char '/') <*> hexadecimal
 fromByteString :: ByteString -> Either String LSN
 fromByteString = parseOnly lsnParser
 
+-- | Note that as of bytestring ~0.10.12.0 we don't have upper-case
+-- hex encoders but the patch to add them has been merged and when
+-- available we should switch to them
 toByteString :: LSN -> ByteString
-toByteString (LSN filepart off) = BL.toStrict $ Builder.toLazyByteString (word32Hex (fromIntegral filepart) <> Builder.char7 '/' <> word32Hex (fromIntegral off))
+toByteString (LSN filepart off) = BL.toStrict
+  $ Builder.toLazyByteString
+  ( word32Hex (fromIntegral filepart)
+    <> Builder.char7 '/'
+    <> word32Hex (fromIntegral off)
+  )
 
--- | Add a number of bytes from an LSN
+-- | Add a number of bytes to an LSN
 add :: LSN -> Int64 -> LSN
 add lsn bytes = fromInt64 . (+ bytes) . toInt64 $ lsn
 
