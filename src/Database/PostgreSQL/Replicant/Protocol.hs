@@ -20,6 +20,8 @@ import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.State
 import Database.PostgreSQL.Replicant.Util
 import Database.PostgreSQL.Replicant.Types.Lsn
+import Database.PostgreSQL.Replicant.Queue (FifoQueue)
+import qualified Database.PostgreSQL.Replicant.Queue as Q
 
 data IdentifySystem
   = IdentifySystem
@@ -171,7 +173,7 @@ startReplicationStream conn slotName systemLogPos cb = do
       case status of
         CopyBoth -> do
           keepAliveChan <- newChan
-          statusUpdateQueue <- newMVar S.empty
+          statusUpdateQueue <- Q.empty
           race
             (keepAliveHandler conn keepAliveChan walProgressState statusUpdateQueue)
             (handleCopyOutData keepAliveChan walProgressState conn cb)
@@ -187,10 +189,10 @@ startReplicationStream conn slotName systemLogPos cb = do
 -- | This thread listens on the channel for /primary keep-alive
 -- messages/ from the server and responds to them with the /update
 -- status/ message using the current WAL stream state.
-keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> MVar (Seq StandbyStatusUpdate) -> IO ()
+keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> FifoQueue StandbyStatusUpdate -> IO ()
 keepAliveHandler conn msgs (WalProgressState walState) statusUpdateQueue = forever $ do
-  queue <- readMVar statusUpdateQueue
-  when (not (S.null queue)) $ sendQueuedUpdates conn statusUpdateQueue
+  isNull <- Q.null statusUpdateQueue
+  when (not isNull) $ sendQueuedUpdates conn statusUpdateQueue
   keepAlive <- readChan msgs
   (WalProgress received flushed applied) <- readMVar walState
   case primaryKeepAliveResponseExpectation keepAlive of
@@ -215,31 +217,28 @@ keepAliveHandler conn msgs (WalProgressState walState) statusUpdateQueue = forev
           err <- errorMessage conn
           print err
         CopyInWouldBlock -> do
-          queue <- takeMVar statusUpdateQueue
-          putMVar statusUpdateQueue $ statusUpdate <| queue
+          Q.enqueue statusUpdateQueue statusUpdate
           threadDelay 500
 
 -- | Drain the queue of StandbyStatusUpdates and send them to the
 -- server.  Keep retrying (with delay) until the queue is empty.
 --
 -- The queue should be non-empty and this operation could block.
-sendQueuedUpdates :: Connection -> MVar (Seq StandbyStatusUpdate) -> IO ()
+sendQueuedUpdates :: Connection -> FifoQueue StandbyStatusUpdate -> IO ()
 sendQueuedUpdates conn statusUpdateQueue = do
-  queue <- takeMVar statusUpdateQueue
-  case S.viewl queue of
-    EmptyL -> putMVar statusUpdateQueue $ S.empty
-    update :< rest -> do
+  maybeUpdate <- Q.dequeue statusUpdateQueue
+  case maybeUpdate of
+    Nothing -> pure ()
+    Just update -> do
       copyResult <- putCopyData conn $ encode update
       case copyResult of
         CopyInOk -> do
-          putMVar statusUpdateQueue rest
           threadDelay 500
           sendQueuedUpdates conn statusUpdateQueue
         CopyInError -> do
           err <- maybe "sendQueuedUpdates: unknown error" id <$> errorMessage conn
           throwIO $ ReplicantException $ B.unpack err
         CopyInWouldBlock -> do
-          queue <- takeMVar statusUpdateQueue
-          putMVar statusUpdateQueue $ update <| rest
+          Q.enqueueRight statusUpdateQueue update
           threadDelay 500
           sendQueuedUpdates conn statusUpdateQueue
