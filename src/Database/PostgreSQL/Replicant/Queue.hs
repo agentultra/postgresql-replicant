@@ -4,6 +4,32 @@ import Control.Concurrent.MVar
 import Data.Sequence (Seq, ViewR (..), (<|), (|>))
 import qualified Data.Sequence as S
 
+data BoundedFifoQueueMeta a
+  = BoundedFifoQueueMeta
+  { boundedFifoQueueSize :: Int
+  , boundedFifoQueue     :: Seq a
+  }
+  deriving (Eq, Show)
+
+newtype BoundedFifoQueue a = BoundedFifoQueue (MVar (BoundedFifoQueueMeta a))
+
+newtype BoundedQueueException a
+  = BoundedQueueOverflow a
+  deriving (Eq, Show)
+
+emptyBounded :: Int -> IO (BoundedFifoQueue a)
+emptyBounded size =
+  BoundedFifoQueue <$> newMVar (BoundedFifoQueueMeta size S.empty)
+
+enqueueBounded :: BoundedFifoQueue a -> a -> IO (Either (BoundedQueueException a) ())
+enqueueBounded (BoundedFifoQueue mQueue) x = do
+  b@(BoundedFifoQueueMeta size queue) <- takeMVar mQueue
+  if size == S.length queue
+    then pure $ Left $ BoundedQueueOverflow x
+    else do
+    putMVar mQueue $ b { boundedFifoQueue = x <| queue }
+    pure $ Right ()
+
 newtype FifoQueue a = FifoQueue (MVar (Seq a))
 
 empty :: IO (FifoQueue a)
