@@ -15,6 +15,7 @@ import Data.Serialize
 import Data.Typeable
 import Database.PostgreSQL.LibPQ
 
+import Database.PostgreSQL.Replicant.Exception
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.State
@@ -114,11 +115,6 @@ handleReplicationDone :: Connection -> IO ()
 handleReplicationDone _ = do
   putStrLn "We should be finished with copying?"
   pure ()
-
-data ReplicantException = ReplicantException String
-  deriving (Show, Typeable)
-
-instance Exception ReplicantException
 
 -- | Used to re-throw an exception received from the server.
 handleReplicationError :: Connection -> IO ()
