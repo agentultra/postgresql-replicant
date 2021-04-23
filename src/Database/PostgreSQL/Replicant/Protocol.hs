@@ -22,6 +22,7 @@ import Database.PostgreSQL.Replicant.Util
 import Database.PostgreSQL.Replicant.Types.Lsn
 import Database.PostgreSQL.Replicant.Queue (FifoQueue)
 import qualified Database.PostgreSQL.Replicant.Queue as Q
+import Database.PostgreSQL.Replicant.ReplicationSlot
 
 data IdentifySystem
   = IdentifySystem
@@ -53,37 +54,6 @@ identifySystemSync conn = do
             Left _ -> pure Nothing
             Right logPosLsn ->
               pure $ Just (IdentifySystem s t logPosLsn d)
-        _ -> pure Nothing
-
-data ReplicationSlot =
-  ReplicationSlot
-  { replicationSlotName            :: ByteString
-  , replicationSlotConsistentPoint :: ByteString
-  , replicationSlotSnapshotName    :: ByteString
-  , replicationSlotOutputPlugin    :: ByteString
-  }
-  deriving (Eq, Show)
-
-createReplicationSlotCommand :: ByteString -> ByteString
-createReplicationSlotCommand slotName =
-  B.intercalate " " ["CREATE_REPLICATION_SLOT", slotName, "LOGICAL wal2json"]
-
--- | Create a replication slot using synchronous query execution.
--- @Nothing@ means the command was unsuccessful and the slot was not
--- created.
-createReplicationSlotSync :: Connection -> ByteString -> IO (Maybe ReplicationSlot)
-createReplicationSlotSync conn slotName = do
-  result <- exec conn $ createReplicationSlotCommand slotName
-  case result of
-    Nothing -> pure Nothing
-    Just r  -> do
-      sName           <- getvalue' r (toRow 0) (toColumn 0)
-      consistentPoint <- getvalue' r (toRow 0) (toColumn 1)
-      snapshotName    <- getvalue' r (toRow 0) (toColumn 2)
-      outputPlugin    <- getvalue' r (toRow 0) (toColumn 3)
-      case (sName, consistentPoint, snapshotName, outputPlugin) of
-        (Just s, Just c, Just sn, Just op) ->
-          pure $ Just (ReplicationSlot s c sn op)
         _ -> pure Nothing
 
 startReplicationCommand :: ByteString -> LSN -> ByteString

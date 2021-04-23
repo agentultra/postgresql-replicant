@@ -17,6 +17,7 @@ import System.Posix.Types
 
 import Database.PostgreSQL.Replicant.Protocol
 import Database.PostgreSQL.Replicant.Message
+import Database.PostgreSQL.Replicant.ReplicationSlot
 
 data PgSettings
   = PgSettings
@@ -48,8 +49,8 @@ withLogicalStream settings cb = do
     PollingOk -> do
       putStrLn "Connection ready!"
       (Just info) <- identifySystemSync conn
-      (Just repSlot) <- createReplicationSlotSync conn $ B.pack . pgSlotName $ settings
-      startReplicationStream conn (replicationSlotName repSlot) (identifySystemLogPos info) cb
+      (Just repSlot) <- setupReplicationSlot conn $ B.pack . pgSlotName $ settings
+      startReplicationStream conn (slotName repSlot) (identifySystemLogPos info) cb
       pure ()
 
   where
