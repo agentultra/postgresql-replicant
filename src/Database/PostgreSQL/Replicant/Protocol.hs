@@ -135,10 +135,10 @@ handleReplicationRow keepAliveChan walState _ row cb =
           pure ()
       KeepAliveM keepAlive -> writeChan keepAliveChan keepAlive
 
+-- | We're not expecting to write any data when reading the
+-- replication stream from this thread, so this is a no-op.
 handleReplicationWouldBlock :: Connection -> IO ()
-handleReplicationWouldBlock _ = do
-  putStrLn "What do here?"
-  pure ()
+handleReplicationWouldBlock _ = pure ()
 
 handleReplicationDone :: Connection -> IO ()
 handleReplicationDone _ = do
