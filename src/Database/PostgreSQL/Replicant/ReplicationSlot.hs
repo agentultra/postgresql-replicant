@@ -3,6 +3,7 @@ module Database.PostgreSQL.Replicant.ReplicationSlot where
 import Control.Exception
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as B8
 import Database.PostgreSQL.LibPQ
 
 import Database.PostgreSQL.Replicant.Exception
@@ -65,7 +66,9 @@ createReplicationSlotSync conn slotName = do
           case fromByteString c of
             Left _ -> throwIO $ ReplicantException "createReplicationSlotSync: invalid LSN detected"
             Right lsn -> pure $ Just (ReplicationSlotInfo s op Logical Active lsn)
-        _ -> pure Nothing
+        _ -> do
+          err <- maybe "createReplicationSlotSync: unknown error" id <$> errorMessage conn
+          throwIO $ ReplicantException (B8.unpack err)
 
 getReplicationSlotInfoCommand :: Connection -> ByteString -> IO (Maybe ByteString)
 getReplicationSlotInfoCommand conn slotName = do
@@ -101,7 +104,9 @@ getReplicationSlotSync conn slotName = do
               case fromByteString r of
                 Left _ -> pure Nothing -- TODO: this shouldn't happen...
                 Right lsn -> pure $ Just $ ReplicationSlotInfo n p (parseSlotType t) (parseSlotActive a) lsn
-
+            _ ->  do
+              err <- maybe "getReplicationSlotSync: unknown error" id <$> errorMessage conn
+              throwIO $ ReplicantError err
 
 -- | Create replication slot or retrieve the existing slot
 setupReplicationSlot :: Connection -> ByteString -> IO (Maybe ReplicationSlotInfo)
