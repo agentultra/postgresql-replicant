@@ -1,7 +1,6 @@
 module Main where
 
 import Control.Exception
-import Database.PostgreSQL.LibPQ
 import Database.PostgreSQL.Replicant
 
 main :: IO ()
