@@ -5,7 +5,7 @@ import Database.PostgreSQL.Replicant
 
 main :: IO ()
 main = do
-  let settings = PgSettings "jking" "hackday" "localhost" "5432" "hackday_sub_1"
+  let settings = PgSettings "postgresql" "postgresql" "localhost" "5432" "replicant_test"
   withLogicalStream settings $ \change -> do
     putStrLn "Change received!"
     print change
