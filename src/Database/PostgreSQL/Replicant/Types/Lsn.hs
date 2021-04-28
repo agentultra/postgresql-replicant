@@ -1,3 +1,26 @@
+{-|
+Module      : Database.PostgreSQL.Replicant.Types.Lsn
+Description : Types and parsers for LSNs
+Copyright   : (c) James King, 2021
+License     : GPL-3
+Maintainer  : james@agentultra.com
+Stability   : experimental
+Portability : POSIX
+
+/Log Sequence Number/ or LSN is a pointer to a place inside of a WAL
+log file.  It contains the file name and an offset in bytes encoded in
+two parts.
+
+LSNs can be serialized into 64-bit big-endian numbers in the binary
+protocol but are also represented textually in query results and other
+places.
+
+This module follows a similar convention to many containers libraries
+and should probably be imported qualified to avoid name clashes if
+needed.
+
+See: https://www.postgresql.org/docs/10/datatype-pg-lsn.html
+-}
 module Database.PostgreSQL.Replicant.Types.Lsn where
 
 import Data.Attoparsec.ByteString.Char8
