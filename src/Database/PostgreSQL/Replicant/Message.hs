@@ -2,7 +2,7 @@
 Module      : Database.PostgreSQL.Replicant.Message
 Description : Streaming replication message types
 Copyright   : (c) James King, 2021
-License     : GPL-3
+License     : BSD3
 Maintainer  : james@agentultra.com
 Stability   : experimental
 Portability : POSIX
