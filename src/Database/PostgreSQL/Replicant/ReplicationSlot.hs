@@ -10,15 +10,6 @@ import Database.PostgreSQL.Replicant.Exception
 import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.Types.Lsn
 
--- data ReplicationSlot =
---   ReplicationSlot
---   { replicationSlotName            :: ByteString
---   , replicationSlotConsistentPoint :: ByteString
---   , replicationSlotSnapshotName    :: ByteString
---   , replicationSlotOutputPlugin    :: ByteString
---   }
---   deriving (Eq, Show)
-
 data ReplicationSlotInfo
   = ReplicationSlotInfo
   { slotName    :: ByteString
@@ -45,30 +36,39 @@ parseSlotActive "t" = Active
 parseSlotActive "f" = Inactive
 parseSlotActive _   = Inactive
 
-createReplicationSlotCommand :: ByteString -> ByteString
-createReplicationSlotCommand slotName =
-  B.intercalate " " ["CREATE_REPLICATION_SLOT", slotName, "LOGICAL wal2json"]
+createReplicationSlotCommand :: Connection -> ByteString -> IO (Maybe ByteString)
+createReplicationSlotCommand conn slotName = do
+  escapedName <- escapeIdentifier conn slotName
+  case escapedName of
+    Nothing -> pure Nothing
+    Just escaped ->
+      pure $ Just $
+      B.intercalate "" ["CREATE_REPLICATION_SLOT", escaped, "LOGICAL wal2json"]
 
 -- | Create a replication slot using synchronous query execution.
 -- @Nothing@ means the command was unsuccessful and the slot was not
 -- created.
 createReplicationSlotSync :: Connection -> ByteString -> IO (Maybe ReplicationSlotInfo)
 createReplicationSlotSync conn slotName = do
-  result <- exec conn $ createReplicationSlotCommand slotName
-  case result of
+  createReplicationSlotQuery <- createReplicationSlotCommand conn slotName
+  case createReplicationSlotQuery of
     Nothing -> pure Nothing
-    Just r  -> do
-      sName           <- getvalue' r (toRow 0) (toColumn 0)
-      consistentPoint <- getvalue' r (toRow 0) (toColumn 1)
-      outputPlugin    <- getvalue' r (toRow 0) (toColumn 3)
-      case (sName, consistentPoint, outputPlugin) of
-        (Just s, Just c, Just op) ->
-          case fromByteString c of
-            Left _ -> throwIO $ ReplicantException "createReplicationSlotSync: invalid LSN detected"
-            Right lsn -> pure $ Just (ReplicationSlotInfo s op Logical Active lsn)
-        _ -> do
-          err <- maybe "createReplicationSlotSync: unknown error" id <$> errorMessage conn
-          throwIO $ ReplicantException (B8.unpack err)
+    Just query -> do
+      result <- exec conn query
+      case result of
+        Nothing -> pure Nothing
+        Just r  -> do
+          sName           <- getvalue' r (toRow 0) (toColumn 0)
+          consistentPoint <- getvalue' r (toRow 0) (toColumn 1)
+          outputPlugin    <- getvalue' r (toRow 0) (toColumn 3)
+          case (sName, consistentPoint, outputPlugin) of
+            (Just s, Just c, Just op) ->
+              case fromByteString c of
+                Left _ -> throwIO $ ReplicantException "createReplicationSlotSync: invalid LSN detected"
+                Right lsn -> pure $ Just (ReplicationSlotInfo s op Logical Active lsn)
+            _ -> do
+              err <- maybe "createReplicationSlotSync: unknown error" id <$> errorMessage conn
+              throwIO $ ReplicantException (B8.unpack err)
 
 getReplicationSlotInfoCommand :: Connection -> ByteString -> IO (Maybe ByteString)
 getReplicationSlotInfoCommand conn slotName = do
@@ -104,9 +104,7 @@ getReplicationSlotSync conn slotName = do
               case fromByteString r of
                 Left _ -> pure Nothing -- TODO: this shouldn't happen...
                 Right lsn -> pure $ Just $ ReplicationSlotInfo n p (parseSlotType t) (parseSlotActive a) lsn
-            _ ->  do
-              err <- maybe "getReplicationSlotSync: unknown error" id <$> errorMessage conn
-              throwIO $ ReplicantError err
+            _ ->  pure Nothing
 
 -- | Create replication slot or retrieve the existing slot
 setupReplicationSlot :: Connection -> ByteString -> IO (Maybe ReplicationSlotInfo)
