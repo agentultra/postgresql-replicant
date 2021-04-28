@@ -1,6 +1,6 @@
-name:                postgres-replicant
+name:                postgresql-replicant
 version:             0.1.0.0
-github:              "agentultra/postgres-replicant"
+github:              "agentultra/postgresql-replicant"
 license:             BSD3
 author:              "James King"
 maintainer:          "james@agentultra.com"
@@ -12,8 +12,8 @@ extra-source-files:
 - LICENSE
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            PostgreSQL logical streaming replication library
+category:            Experimental, Database
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
