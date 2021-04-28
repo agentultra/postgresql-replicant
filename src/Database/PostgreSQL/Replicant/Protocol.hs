@@ -57,9 +57,20 @@ identifySystemSync conn = do
               pure $ Just (IdentifySystem s t logPosLsn d)
         _ -> pure Nothing
 
-startReplicationCommand :: ByteString -> LSN -> ByteString
-startReplicationCommand slotName systemLogPos =
-  B.intercalate " " ["START_REPLICATION SLOT", slotName, "LOGICAL", (toByteString systemLogPos)]
+startReplicationCommand :: Connection -> ByteString -> LSN -> IO ByteString
+startReplicationCommand conn slotName systemLogPos = do
+  escapedName <- escapeIdentifier conn slotName
+  case escapedName of
+    Nothing -> throwIO $ ReplicantException $ "Invalid slot name: " ++ show slotName
+    Just escaped ->
+      pure $
+      B.intercalate
+      ""
+      [ "START_REPLICATION SLOT "
+      , escaped
+      , " LOGICAL "
+      , (toByteString systemLogPos)
+      ]
 
 -- | This thread handles the COPY OUT mode messages.  PostgreSQL uses
 -- this mode to copy the data from a WAL log file to the socket in the
@@ -131,7 +142,8 @@ startReplicationStream :: Connection -> ByteString -> LSN -> (Change -> IO a) ->
 startReplicationStream conn slotName systemLogPos cb = do
   let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
-  result <- exec conn $ startReplicationCommand slotName systemLogPos
+  replicationCommandQuery <- startReplicationCommand conn slotName systemLogPos
+  result <- exec conn replicationCommandQuery
   case result of
     Nothing -> putStrLn "Woopsie" >>= \_ -> pure ()
     Just r  -> do
