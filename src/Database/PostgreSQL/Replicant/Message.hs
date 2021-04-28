@@ -1,3 +1,16 @@
+{-|
+Module      : Database.PostgreSQL.Replicant.Message
+Description : Streaming replication message types
+Copyright   : (c) James King, 2021
+License     : GPL-3
+Maintainer  : james@agentultra.com
+Stability   : experimental
+Portability : POSIX
+
+This module contains the binary protocols messages used in the
+streaming replication protocol as well as the messages used in the
+body of the logical stream messages.
+-}
 module Database.PostgreSQL.Replicant.Message where
 
 import Control.Applicative
@@ -18,6 +31,8 @@ import Database.PostgreSQL.Replicant.Types.Lsn
 
 -- WAL Replication Stream messages
 
+-- | Indicates whether the server or the client should respond to the
+-- message.
 data ResponseExpectation
   = ShouldRespond
   | DoNotRespond
@@ -34,6 +49,13 @@ instance Serialize ResponseExpectation where
       1 -> pure ShouldRespond
       _ -> fail "Unrecognized response expectation flag"
 
+-- | The Postgres WAL sender thread may periodically send these
+-- messages.  When the server expects the client to respond it updates
+-- its internal state of the client based on the response.  Failure to
+-- respond results in the dreaded "WAL timeout" error.
+--
+-- See StandbyStatusUpdate for the message the client should respond
+-- with.
 data PrimaryKeepAlive
   = PrimaryKeepAlive
   { primaryKeepAliveWalEnd              :: !Int64
@@ -56,6 +78,9 @@ instance Serialize PrimaryKeepAlive where
     responseExpectation <- get
     pure $ PrimaryKeepAlive walEnd sendTime responseExpectation
 
+-- | Sent by the client.  Can be sent periodically or in response to a
+-- PrimaryKeepAlive message from the server.  Gives the server
+-- information about the client stream state.
 data StandbyStatusUpdate
   = StandbyStatusUpdate
   { standbyStatuUpdateLastWalByteReceived  :: !LSN
@@ -95,6 +120,7 @@ instance Serialize StandbyStatusUpdate where
       sendTime
       responseExpectation
 
+-- | Carries WAL segments in the streaming protocol.
 data XLogData
   = XLogData
   { xLogDataWalStart :: !LSN
@@ -120,6 +146,7 @@ instance Serialize XLogData where
     walData  <- consumeByteStringToEnd
     pure $ XLogData walStart walEnd sendTime walData
 
+-- | Not used yet but enables streaming in hot-standby mode.
 data HotStandbyFeedback
   = HotStandbyFeedback
   { hotStandbyFeedbackClientSendTime :: !Int64
@@ -142,6 +169,8 @@ instance Serialize HotStandbyFeedback where
     currentEpoch <- getInt32be
     pure $ HotStandbyFeedback clientSendTime currentXmin currentEpoch
 
+-- | This structure wraps the two messages sent by the server so that
+-- we get a Serialize instance for both.
 data WalCopyData
   = XLogDataM !XLogData
   | KeepAliveM !PrimaryKeepAlive
@@ -165,6 +194,9 @@ instance Serialize WalCopyData where
 
 -- WAL Log Data
 
+-- | Wraps Postgres values.  Since this library currently supports
+-- only the @wal2json@ logical decoder plugin we have the JSON values
+-- much like Aeson does.
 data WalValue
   = WalString !Text
   | WalNumber !Scientific
@@ -185,6 +217,9 @@ instance ToJSON WalValue where
   toJSON (WalBool b)     = Bool b
   toJSON (WalNull)       = Null
 
+-- | Represents a single table column.  We only support the `wal2json`
+-- logical decoder plugin and make no attempt to parse anything but
+-- JSON-like primitives.
 data Column
   = Column
   { columnName  :: !Text
@@ -213,6 +248,8 @@ fromColumn (Column cName cType cValue) = (cName, cType, cValue)
 fromColumns :: [Column] -> ([Text], [Text], [WalValue])
 fromColumns = unzip3 . map fromColumn
 
+-- | Represents a single insert query in the logical replication
+-- format.
 data Insert
   = Insert
   { insertSchema  :: !String
@@ -245,6 +282,8 @@ instance ToJSON Insert where
               , "columnvalues" .= cValues
               ]
 
+-- | Represents a single update query in the logical replication
+-- format.
 data Update
   = Update
   { updateSchema  :: !Text
@@ -277,6 +316,7 @@ instance ToJSON Update where
               , "columnvalues" .= cValues
               ]
 
+-- | Represents a single delete query in the logical replication format
 data Delete
   = Delete
   { deleteSchema  :: !Text
@@ -312,6 +352,8 @@ instance ToJSON Delete where
                 ]
               ]
 
+-- | Occasionally the server may also send these for informational
+-- purposes and can be ignored.  May be used internally.
 data Message
   = Message
   { messageTransactional :: !Bool
