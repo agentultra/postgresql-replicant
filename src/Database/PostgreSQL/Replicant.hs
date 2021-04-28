@@ -1,4 +1,32 @@
 {-# LANGUAGE RecordWildCards #-}
+
+{-|
+Module      : Database.PostgreSQL.Replicant
+Description : A PostgreSQL streaming replication library
+Copyright   : (c) James King, 2021
+License     : GPL-3
+Maintainer  : james@agentultra.com
+Stability   : experimental
+Portability : POSIX
+
+Connect to a PostgreSQL server as a logical replication client and
+receive changes.
+
+The basic API is this:
+
+@
+  withLogicalStream defaultSettings $ \change -> do
+    print change
+    `catch` \err -> do
+      show err
+@
+
+This is a low-level library meant to give the primitives necessary to
+library authors to add streaming replication support.  The API here to
+rather simplistic but should be hooked up to something like conduit to
+provide better ergonomics.
+-}
+
 module Database.PostgreSQL.Replicant
     ( withLogicalStream
     , PgSettings (..)
@@ -41,6 +69,18 @@ pgConnectionString PgSettings {..} = B.intercalate " "
   , "replication=database"
   ]
 
+-- | Connect to a PostgreSQL database as a user with the replication
+-- attribute and start receiving changes using the logical replication
+-- protocol.  Logical replication happens at the query level so the
+-- changes you get represent the set of queries in a transaction:
+-- /insert/, /update/, and /delete/.
+--
+-- This function will create the replication slot, if it doesn't
+-- exist, or reconnect to it otherwise and restart the stream from
+-- where the replication slot left off.
+--
+-- This function can throw exceptions in @IO@ and shut-down the
+-- socket in case of any error.
 withLogicalStream :: PgSettings -> (Change -> IO a) -> IO ()
 withLogicalStream settings cb = do
   conn <- connectStart $ pgConnectionString settings
