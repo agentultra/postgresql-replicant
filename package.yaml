@@ -57,7 +57,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - postgresql-libpq
-    - postgres-replicant
+    - postgresql-replicant
 
 tests:
   postgres-replicant-test:
@@ -72,4 +72,4 @@ tests:
     - binary
     - bytestring
     - hspec
-    - postgres-replicant
+    - postgresql-replicant
