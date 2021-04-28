@@ -1,3 +1,16 @@
+{-|
+Module      : Database.PostgreSQL.Replicant.Protocol
+Description : Streaming replication protocol
+Copyright   : (c) James King, 2021
+License     : GPL-3
+Maintainer  : james@agentultra.com
+Stability   : experimental
+Portability : POSIX
+
+This module implements the Postgres streaming replication protocol.
+
+See: https://www.postgresql.org/docs/9.5/protocol-replication.html
+-}
 module Database.PostgreSQL.Replicant.Protocol where
 
 import Control.Concurrent
@@ -25,6 +38,9 @@ import Database.PostgreSQL.Replicant.Queue (FifoQueue)
 import qualified Database.PostgreSQL.Replicant.Queue as Q
 import Database.PostgreSQL.Replicant.ReplicationSlot
 
+-- | The information returned by the @IDENTIFY_SYSTEM@ command
+-- establishes the stream's log start, position, and information about
+-- the database.
 data IdentifySystem
   = IdentifySystem
   { identifySystemSytemId  :: ByteString
@@ -57,6 +73,8 @@ identifySystemSync conn = do
               pure $ Just (IdentifySystem s t logPosLsn d)
         _ -> pure Nothing
 
+-- | Create a @START_REPLICATION_SLOT@ query, escaping the slot name
+-- passed in by the user.
 startReplicationCommand :: Connection -> ByteString -> LSN -> IO ByteString
 startReplicationCommand conn slotName systemLogPos = do
   escapedName <- escapeIdentifier conn slotName
@@ -72,8 +90,8 @@ startReplicationCommand conn slotName systemLogPos = do
       , (toByteString systemLogPos)
       ]
 
--- | This thread handles the COPY OUT mode messages.  PostgreSQL uses
--- this mode to copy the data from a WAL log file to the socket in the
+-- | This handles the COPY OUT mode messages.  PostgreSQL uses this
+-- mode to copy the data from a WAL log file to the socket in the
 -- streaming replication protocol.
 handleCopyOutData
   :: Chan PrimaryKeepAlive
@@ -122,6 +140,9 @@ handleReplicationRow keepAliveChan walState _ row cb =
 handleReplicationWouldBlock :: Connection -> IO ()
 handleReplicationWouldBlock _ = pure ()
 
+-- | TODO: When the @COPY OUT@ mode is finished the server sends one
+-- result tuple with the information to start streaming the next WAL
+-- file.
 handleReplicationDone :: Connection -> IO ()
 handleReplicationDone _ = do
   putStrLn "We should be finished with copying?"
@@ -164,9 +185,10 @@ startReplicationStream conn slotName systemLogPos cb = do
           err <- errorMessage conn
           print err
 
--- | This thread listens on the channel for /primary keep-alive
--- messages/ from the server and responds to them with the /update
--- status/ message using the current WAL stream state.
+-- | This listens on the channel for /primary keep-alive messages/
+-- from the server and responds to them with the /update status/
+-- message using the current WAL stream state.  It will attempt to
+-- buffer prior update messages when the socket is blocked.
 keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> FifoQueue StandbyStatusUpdate -> IO ()
 keepAliveHandler conn msgs (WalProgressState walState) statusUpdateQueue = forever $ do
   isNull <- Q.null statusUpdateQueue
@@ -201,7 +223,7 @@ keepAliveHandler conn msgs (WalProgressState walState) statusUpdateQueue = forev
 -- | Drain the queue of StandbyStatusUpdates and send them to the
 -- server.  Keep retrying (with delay) until the queue is empty.
 --
--- The queue should be non-empty and this operation could block.
+-- This operation will block until the queue is empty.
 sendQueuedUpdates :: Connection -> FifoQueue StandbyStatusUpdate -> IO ()
 sendQueuedUpdates conn statusUpdateQueue = do
   maybeUpdate <- Q.dequeue statusUpdateQueue
