@@ -1,3 +1,14 @@
+{-|
+Module      : Database.PostgreSQL.Replicant.Queue
+Description : Bounded and unbounded FIFO queues
+Copyright   : (c) James King, 2020, 2021
+License     : BSD3
+Maintainer  : james@agentultra.com
+Stability   : experimental
+Portability : POSIX
+
+Shared FIFO queues
+-}
 module Database.PostgreSQL.Replicant.Queue where
 
 import Control.Concurrent.MVar

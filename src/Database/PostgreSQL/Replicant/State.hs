@@ -1,7 +1,7 @@
 {-|
 Module      : Database.PostgreSQL.Replicant.State
 Description : Internal replication stream state
-Copyright   : (c) James King, 2021
+Copyright   : (c) James King, 2020, 2021
 License     : BSD3
 Maintainer  : james@agentultra.com
 Stability   : experimental

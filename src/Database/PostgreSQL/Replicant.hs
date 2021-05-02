@@ -3,7 +3,7 @@
 {-|
 Module      : Database.PostgreSQL.Replicant
 Description : A PostgreSQL streaming replication library
-Copyright   : (c) James King, 2021
+Copyright   : (c) James King, 2020, 2021
 License     : BSD3
 Maintainer  : james@agentultra.com
 Stability   : experimental

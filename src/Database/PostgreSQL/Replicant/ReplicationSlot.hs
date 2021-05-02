@@ -1,3 +1,15 @@
+{-|
+Module      : Database.PostgreSQL.Replicant.ReplicationSlot
+Description : Replication slot query commands
+Copyright   : (c) James King, 2020, 2021
+License     : BSD3
+Maintainer  : james@agentultra.com
+Stability   : experimental
+Portability : POSIX
+
+This module contains the PostgreSQL queries, types, and functions for
+working with querying, creating, and working with replication slots.
+-}
 module Database.PostgreSQL.Replicant.ReplicationSlot where
 
 import Control.Exception
