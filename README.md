@@ -80,6 +80,24 @@ Presently we only support the `wal2json` WAL output plugin and only
 the v1 format.  Support for the v2 format is planned as are more
 output plugins.
 
+## Example Program
+
+Included is a simple program, `replicant-example` which should help
+you test your connection settings and make sure that you can connect
+and receive WAL changes.
+
+You can change the connection settings through environment variables:
+
+    PG_USER=myuser PG_DATABASE=mydb replicant-example
+
+The configuration settings are:
+
+- `PG_USER`: The replication user to connect as
+- `PG_DATABASE`: The database to connect to
+- `PG_HOST`: The host name of the database to connect to
+- `PG_PORT`: The port to connect on
+- `PG_SLOTNAME`: The replication slot to create or connect to
+
 ## FAQ
 
 ### Why not use LISTEN/NOTIFY

@@ -1,11 +1,19 @@
 module Main where
 
+import Data.Maybe
 import Control.Exception
+import System.Environment
+
 import Database.PostgreSQL.Replicant
 
 main :: IO ()
 main = do
-  let settings = PgSettings "postgresql" "postgresql" "localhost" "5432" "replicant_test"
+  dbUser <- maybe "postgresql" id <$> lookupEnv "PG_USER"
+  dbName <- maybe "postgresql" id <$> lookupEnv "PG_DATABASE"
+  dbHost <- maybe "localhost" id <$> lookupEnv "PG_HOST"
+  dbPort <- maybe "5432" id <$> lookupEnv "PG_PORT"
+  dbSlot <- maybe "replicant_test" id <$> lookupEnv "PG_SLOTNAME"
+  let settings = PgSettings dbUser dbName dbHost dbPort dbSlot
   withLogicalStream settings $ \change -> do
     putStrLn "Change received!"
     print change
