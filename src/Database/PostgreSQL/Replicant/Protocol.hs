@@ -59,19 +59,27 @@ identifySystemSync :: Connection -> IO (Maybe IdentifySystem)
 identifySystemSync conn = do
   result <- exec conn identifySystemCommand
   case result of
-    Nothing -> pure Nothing
-    Just r  -> do
-      systemId <- getvalue' r (toRow 0) (toColumn 0)
-      timeline <- getvalue' r (toRow 0) (toColumn 1)
-      logpos   <- getvalue' r (toRow 0) (toColumn 2)
-      dbname   <- getvalue' r (toRow 0) (toColumn 3)
-      case (systemId, timeline, logpos, dbname) of
-        (Just s, Just t, Just l, d) -> do
-          case fromByteString l of
-            Left _ -> pure Nothing
-            Right logPosLsn ->
-              pure $ Just (IdentifySystem s t logPosLsn d)
-        _ -> pure Nothing
+    Just r -> do
+      resultStatus <- resultStatus r
+      case resultStatus of
+        TuplesOk -> do
+          systemId <- getvalue' r (toRow 0) (toColumn 0)
+          timeline <- getvalue' r (toRow 0) (toColumn 1)
+          logpos   <- getvalue' r (toRow 0) (toColumn 2)
+          dbname   <- getvalue' r (toRow 0) (toColumn 3)
+          case (systemId, timeline, logpos, dbname) of
+            (Just s, Just t, Just l, d) -> do
+              case fromByteString l of
+                Left _ -> pure Nothing
+                Right logPosLsn -> do
+                  pure $ Just (IdentifySystem s t logPosLsn d)
+            _ -> pure Nothing
+        _ -> do
+          err <- maybe "identifySystemSync: unknown error" id <$> errorMessage conn
+          throwIO $ ReplicantException (B.unpack err)
+    _ -> do
+      err <- maybe "identifySystemSync: unknown error" id <$> errorMessage conn
+      throwIO $ ReplicantException (B.unpack err)
 
 -- | Create a @START_REPLICATION_SLOT@ query, escaping the slot name
 -- passed in by the user.

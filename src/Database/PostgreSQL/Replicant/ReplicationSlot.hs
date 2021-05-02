@@ -51,26 +51,34 @@ createReplicationSlotCommand conn slotName = do
       ]
 
 -- | Create a replication slot using synchronous query execution.
--- @Nothing@ means the command was unsuccessful and the slot was not
--- created.
-createReplicationSlotSync :: Connection -> ByteString -> IO (Maybe ReplicationSlotInfo)
+--
+-- May throw an exception if the command fails.
+createReplicationSlotSync :: Connection -> ByteString -> IO ReplicationSlotInfo
 createReplicationSlotSync conn slotName = do
   createReplicationSlotQuery <- createReplicationSlotCommand conn slotName
   result <- exec conn createReplicationSlotQuery
   case result of
-    Nothing -> pure Nothing
-    Just r  -> do
-      sName           <- getvalue' r (toRow 0) (toColumn 0)
-      consistentPoint <- getvalue' r (toRow 0) (toColumn 1)
-      outputPlugin    <- getvalue' r (toRow 0) (toColumn 3)
-      case (sName, consistentPoint, outputPlugin) of
-        (Just s, Just c, Just op) ->
-          case fromByteString c of
-            Left _ -> throwIO $ ReplicantException "createReplicationSlotSync: invalid LSN detected"
-            Right lsn -> pure $ Just (ReplicationSlotInfo s op Logical Active lsn)
+    Just r -> do
+      resultStatus <- resultStatus r
+      case resultStatus of
+        TuplesOk -> do
+          sName           <- getvalue' r (toRow 0) (toColumn 0)
+          consistentPoint <- getvalue' r (toRow 0) (toColumn 1)
+          outputPlugin    <- getvalue' r (toRow 0) (toColumn 3)
+          case (sName, consistentPoint, outputPlugin) of
+            (Just s, Just c, Just op) ->
+              case fromByteString c of
+                Left _ -> throwIO $ ReplicantException "createReplicationSlotSync: invalid LSN detected"
+                Right lsn -> pure $ ReplicationSlotInfo s op Logical Active lsn
+            _ -> do
+              err <- maybe "createReplicationSlotSync: unknown error" id <$> errorMessage conn
+              throwIO $ ReplicantException (B8.unpack err)
         _ -> do
           err <- maybe "createReplicationSlotSync: unknown error" id <$> errorMessage conn
           throwIO $ ReplicantException (B8.unpack err)
+    _ -> do
+      err <- maybe "createReplicationSlotSync: unknown error" id <$> errorMessage conn
+      throwIO $ ReplicantException (B8.unpack err)
 
 getReplicationSlotInfoCommand :: Connection -> ByteString -> IO ByteString
 getReplicationSlotInfoCommand conn slotName = do
@@ -86,29 +94,42 @@ getReplicationSlotInfoCommand conn slotName = do
       , "';"
       ]
 
+-- | Get information about an existing replication slot.  Returns
+-- @Nothing@ when the requested slot cannot be found.
+--
+-- May throw an exception if the command query fails.
 getReplicationSlotSync :: Connection -> ByteString -> IO (Maybe ReplicationSlotInfo)
 getReplicationSlotSync conn slotName = do
   replicationSlotInfoQuery <- getReplicationSlotInfoCommand conn slotName
   result <- exec conn replicationSlotInfoQuery
   case result of
-    Nothing -> pure Nothing
-    Just r  -> do
-      slotName    <- getvalue' r (toRow 0) (toColumn 0)
-      slotPlugin  <- getvalue' r (toRow 0) (toColumn 1)
-      slotType    <- getvalue' r (toRow 0) (toColumn 2)
-      slotActive  <- getvalue' r (toRow 0) (toColumn 3)
-      slotRestart <- getvalue' r (toRow 0) (toColumn 4)
-      case (slotName, slotPlugin, slotType, slotActive, slotRestart) of
-        (Just n, Just p, Just t, Just a, Just r) -> do
-          case fromByteString r of
-            Left _ -> pure Nothing -- TODO: this shouldn't happen...
-            Right lsn -> pure $ Just $ ReplicationSlotInfo n p (parseSlotType t) (parseSlotActive a) lsn
-        _ ->  pure Nothing
+    Just r -> do
+      resultStatus <- resultStatus r
+      case resultStatus of
+        TuplesOk -> do
+          slotName    <- getvalue' r (toRow 0) (toColumn 0)
+          slotPlugin  <- getvalue' r (toRow 0) (toColumn 1)
+          slotType    <- getvalue' r (toRow 0) (toColumn 2)
+          slotActive  <- getvalue' r (toRow 0) (toColumn 3)
+          slotRestart <- getvalue' r (toRow 0) (toColumn 4)
+          case (slotName, slotPlugin, slotType, slotActive, slotRestart) of
+            (Just n, Just p, Just t, Just a, Just restart) -> do
+              case fromByteString restart of
+                Left _ -> pure Nothing -- TODO: this shouldn't happen...
+                Right lsn -> pure $ Just $ ReplicationSlotInfo n p (parseSlotType t) (parseSlotActive a) lsn
+            _ ->  pure Nothing
+        _ -> pure Nothing
+    _ -> do
+      err <- maybe "getReplicationSlotSync: unknown error" id <$> errorMessage conn
+      throwIO $ ReplicantException (B8.unpack err)
 
--- | Create replication slot or retrieve the existing slot
-setupReplicationSlot :: Connection -> ByteString -> IO (Maybe ReplicationSlotInfo)
+-- | Create replication slot or retrieve an existing slot.
+--
+-- Can throw exceptions from @getReplicationSlotSync@ or
+-- @createReplicationSlotSync@.
+setupReplicationSlot :: Connection -> ByteString -> IO ReplicationSlotInfo
 setupReplicationSlot conn slotName = do
   maybeSlot <- getReplicationSlotSync conn slotName
   case maybeSlot of
-    Just slot -> pure $ Just slot
+    Just slot -> pure $ slot
     Nothing   -> createReplicationSlotSync conn slotName

@@ -92,8 +92,7 @@ withLogicalStream settings cb = do
     PollingOk -> do
       maybeInfo <- identifySystemSync conn
       info <- maybeThrow (ReplicantException "withLogicalStream: could not get system information") maybeInfo
-      maybeRepSlot <- setupReplicationSlot conn $ B.pack . pgSlotName $ settings
-      repSlot <- maybeThrow (ReplicantException "withLogicalStream: could not get replication slot") maybeRepSlot
+      repSlot <- setupReplicationSlot conn $ B.pack . pgSlotName $ settings
       startReplicationStream conn (slotName repSlot) (identifySystemLogPos info) cb
       pure ()
   where
