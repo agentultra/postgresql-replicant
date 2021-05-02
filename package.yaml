@@ -4,7 +4,7 @@ github:              "agentultra/postgresql-replicant"
 license:             BSD3
 author:              "James King"
 maintainer:          "james@agentultra.com"
-copyright:           "2020 James King"
+copyright:           "2020, 2021, James King"
 
 extra-source-files:
 - README.md
