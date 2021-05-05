@@ -119,17 +119,21 @@ getReplicationSlotSync conn slotName = do
       resultStatus <- resultStatus r
       case resultStatus of
         TuplesOk -> do
-          slotName    <- getvalue' r (toRow 0) (toColumn 0)
-          slotPlugin  <- getvalue' r (toRow 0) (toColumn 1)
-          slotType    <- getvalue' r (toRow 0) (toColumn 2)
-          slotActive  <- getvalue' r (toRow 0) (toColumn 3)
-          slotRestart <- getvalue' r (toRow 0) (toColumn 4)
-          case (slotName, slotPlugin, slotType, slotActive, slotRestart) of
-            (Just n, Just p, Just t, Just a, Just restart) -> do
-              case fromByteString restart of
-                Left _ -> pure Nothing -- TODO: this shouldn't happen...
-                Right lsn -> pure $ Just $ ReplicationSlotInfo n p (parseSlotType t) (parseSlotActive a) lsn
-            _ ->  pure Nothing
+          nRows <- ntuples r
+          if nRows == 0
+            then pure Nothing
+            else do
+            slotName    <- getvalue' r (toRow 0) (toColumn 0)
+            slotPlugin  <- getvalue' r (toRow 0) (toColumn 1)
+            slotType    <- getvalue' r (toRow 0) (toColumn 2)
+            slotActive  <- getvalue' r (toRow 0) (toColumn 3)
+            slotRestart <- getvalue' r (toRow 0) (toColumn 4)
+            case (slotName, slotPlugin, slotType, slotActive, slotRestart) of
+              (Just n, Just p, Just t, Just a, Just restart) -> do
+                case fromByteString restart of
+                  Left _ -> pure Nothing -- TODO: this shouldn't happen...
+                  Right lsn -> pure $ Just $ ReplicationSlotInfo n p (parseSlotType t) (parseSlotActive a) lsn
+              _ ->  pure Nothing
         _ -> pure Nothing
     _ -> do
       err <- maybe "getReplicationSlotSync: unknown error" id <$> errorMessage conn
