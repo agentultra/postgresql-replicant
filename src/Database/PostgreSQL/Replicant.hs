@@ -39,6 +39,8 @@ import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
 import Data.Maybe (fromMaybe)
+import qualified Data.Text as T
+import qualified Data.Text.Read as T
 import Database.PostgreSQL.LibPQ
 import GHC.Event
 import Network.Socket.KeepAlive
@@ -52,11 +54,14 @@ import Database.PostgreSQL.Replicant.Util
 
 data PgSettings
   = PgSettings
-  { pgUser     :: String
-  , pgDbName   :: String
-  , pgHost     :: String
-  , pgPort     :: String
-  , pgSlotName :: String
+  { pgUser        :: String
+  , pgDbName      :: String
+  , pgHost        :: String
+  , pgPort        :: String
+  , pgSlotName    :: String
+  , pgUpdateDelay :: String -- ^ Controls how frequently the
+                            -- primaryKeepAlive thread updates
+                            -- PostgresSQL in @ms@
   }
   deriving (Eq, Show)
 
@@ -87,13 +92,14 @@ withLogicalStream settings cb = do
   mFd <- socket conn
   sockFd <- maybeThrow (ReplicantException "withLogicalStream: could not get socket fd") mFd
   pollResult <- pollConnectStart conn sockFd
+  let updateFreq = getUpdateDelay settings
   case pollResult of
     PollingFailed -> throwIO $ ReplicantException "withLogicalStream: Unable to connect to the database"
     PollingOk -> do
       maybeInfo <- identifySystemSync conn
       info <- maybeThrow (ReplicantException "withLogicalStream: could not get system information") maybeInfo
       repSlot <- setupReplicationSlot conn $ B.pack . pgSlotName $ settings
-      startReplicationStream conn (slotName repSlot) (identifySystemLogPos info) cb
+      startReplicationStream conn (slotName repSlot) (identifySystemLogPos info) updateFreq cb
       pure ()
   where
     pollConnectStart :: Connection -> Fd -> IO PollingStatus
@@ -110,3 +116,8 @@ withLogicalStream settings cb = do
           keepAliveResult <- setKeepAlive cint $ KeepAlive True 60 2
           pure PollingOk
         PollingFailed -> pure PollingFailed
+    getUpdateDelay :: PgSettings -> Int
+    getUpdateDelay PgSettings {..} =
+      case T.decimal . T.pack $ pgUpdateDelay of
+        Left _ -> 3000
+        Right (i, _) -> i

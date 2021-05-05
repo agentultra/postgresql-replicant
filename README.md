@@ -97,6 +97,8 @@ The configuration settings are:
 - `PG_HOST`: The host name of the database to connect to
 - `PG_PORT`: The port to connect on
 - `PG_SLOTNAME`: The replication slot to create or connect to
+- `PG_UPDATEDELAY`: The frequency (in _ms_) to update PostgreSQL on
+  the stream status
 
 ## FAQ
 

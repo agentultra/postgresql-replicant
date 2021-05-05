@@ -161,8 +161,8 @@ handleReplicationError conn = do
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
 -- catch and rethrow exceptions from either thread if any fails or
 -- returns.
-startReplicationStream :: Connection -> ByteString -> LSN -> (Change -> IO a) -> IO ()
-startReplicationStream conn slotName systemLogPos cb = do
+startReplicationStream :: Connection -> ByteString -> LSN -> Int -> (Change -> IO a) -> IO ()
+startReplicationStream conn slotName systemLogPos updateFreq cb = do
   let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
   replicationCommandQuery <- startReplicationCommand conn slotName systemLogPos
@@ -176,7 +176,7 @@ startReplicationStream conn slotName systemLogPos cb = do
       case status of
         CopyBoth -> do
           race
-            (keepAliveHandler conn walProgressState)
+            (keepAliveHandler conn walProgressState updateFreq)
             (handleCopyOutData walProgressState conn cb)
             `catch`
             \exc -> do
@@ -190,8 +190,8 @@ startReplicationStream conn slotName systemLogPos cb = do
 -- | This function repeatedly sends `StandbyStatusUpdate` messages to
 -- the publishing server.  This keeps the wal sender process on the
 -- PostgreSQL server from timing out.
-keepAliveHandler :: Connection -> WalProgressState -> IO ()
-keepAliveHandler conn (WalProgressState walState) = forever $ do
+keepAliveHandler :: Connection -> WalProgressState -> Int -> IO ()
+keepAliveHandler conn (WalProgressState walState) updateFreq = forever $ do
   (WalProgress received flushed applied) <- readMVar walState
   timestamp <- postgresEpoch
   let statusUpdate =
@@ -204,7 +204,7 @@ keepAliveHandler conn (WalProgressState walState) = forever $ do
   copyResult <- putCopyData conn $ encode statusUpdate
   case copyResult of
     CopyInOk -> do
-      threadDelay 3000
+      threadDelay updateFreq
     CopyInError -> do
       err <- maybe "keepAliveHandler: unknown CopyInError" id <$> errorMessage conn
       throwIO $ ReplicantException $ B.unpack err

@@ -13,7 +13,8 @@ main = do
   dbHost <- maybe "localhost" id <$> lookupEnv "PG_HOST"
   dbPort <- maybe "5432" id <$> lookupEnv "PG_PORT"
   dbSlot <- maybe "replicant_test" id <$> lookupEnv "PG_SLOTNAME"
-  let settings = PgSettings dbUser dbName dbHost dbPort dbSlot
+  dbUpdateDelay <- maybe "3000" id <$> lookupEnv "PG_UPDATEDELAY"
+  let settings = PgSettings dbUser dbName dbHost dbPort dbSlot dbUpdateDelay
   withLogicalStream settings $ \change -> do
     putStrLn "Change received!"
     print change
