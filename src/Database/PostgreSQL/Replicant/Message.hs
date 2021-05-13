@@ -173,11 +173,12 @@ instance Serialize HotStandbyFeedback where
 -- we get a Serialize instance for both.
 data WalCopyData
   = XLogDataM !XLogData
-  | UnhandledM
+  | KeepAliveM !PrimaryKeepAlive
   deriving (Eq, Generic, Show)
 
 instance Serialize WalCopyData where
   put (XLogDataM xLogData)   = put xLogData
+  put (KeepAliveM keepAlive) = put keepAlive
   get = do
     messageTypeFlag <- lookAhead $ getWord8
     case messageTypeFlag of
@@ -185,7 +186,11 @@ instance Serialize WalCopyData where
       0x77 -> do
         xLogData <- get
         pure $ XLogDataM xLogData
-      _ -> pure $ UnhandledM
+      -- 'k' PrimaryKeepAlive
+      0x6B -> do
+        keepAlive <- get
+        pure $ KeepAliveM keepAlive
+      _    -> fail "Unrecognized WalCopyData"
 
 -- WAL Log Data
 

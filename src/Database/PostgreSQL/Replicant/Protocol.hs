@@ -34,6 +34,8 @@ import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.State
 import Database.PostgreSQL.Replicant.Util
 import Database.PostgreSQL.Replicant.Types.Lsn
+import Database.PostgreSQL.Replicant.Queue (FifoQueue)
+import qualified Database.PostgreSQL.Replicant.Queue as Q
 import Database.PostgreSQL.Replicant.ReplicationSlot
 
 -- | The information returned by the @IDENTIFY_SYSTEM@ command
@@ -100,32 +102,34 @@ startReplicationCommand conn slotName systemLogPos = do
 -- mode to copy the data from a WAL log file to the socket in the
 -- streaming replication protocol.
 handleCopyOutData
-  :: WalProgressState
+  :: Chan PrimaryKeepAlive
+  -> WalProgressState
   -> Connection
   -> (Change -> IO a)
   -> IO ()
-handleCopyOutData walState conn cb = forever $ do
+handleCopyOutData chan walState conn cb = forever $ do
   d <- getCopyData conn False
   case d of
-    CopyOutRow row    -> handleReplicationRow walState conn row cb
+    CopyOutRow row    -> handleReplicationRow chan walState conn row cb
     CopyOutWouldBlock -> handleReplicationWouldBlock conn
     CopyOutDone       -> handleReplicationDone conn
     CopyOutError      -> handleReplicationError conn
 
 handleReplicationRow
-  :: WalProgressState
+  :: Chan PrimaryKeepAlive
+  -> WalProgressState
   -> Connection
   -> ByteString
   -> (Change -> IO a)
   -> IO ()
-handleReplicationRow walState _ row cb =
+handleReplicationRow keepAliveChan walState _ row cb =
   case decode @WalCopyData row of
     Left err ->
       throwIO
       $ ReplicantException
       $ "handleReplicationRow (decode error): " ++ err
-    Right (XLogDataM xlog) ->
-      case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
+    Right m  -> case m of
+      XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
         Left err ->
           throwIO
           $ ReplicantException
@@ -137,7 +141,7 @@ handleReplicationRow walState _ row cb =
           _ <- updateWalProgress walState bytesReceived
           _ <- cb walLogData
           pure ()
-    _ -> pure ()
+      KeepAliveM keepAlive -> writeChan keepAliveChan keepAlive
 
 -- | We're not expecting to write any data when reading the
 -- replication stream from this thread, so this is a no-op.
@@ -146,9 +150,11 @@ handleReplicationWouldBlock _ = pure ()
 
 -- | TODO: When the @COPY OUT@ mode is finished the server sends one
 -- result tuple with the information to start streaming the next WAL
--- file _when_ the stream was started in an earlier timeline.
+-- file.
 handleReplicationDone :: Connection -> IO ()
-handleReplicationDone _ = pure ()
+handleReplicationDone _ = do
+  putStrLn "We should be finished with copying?"
+  pure ()
 
 -- | Used to re-throw an exception received from the server.
 handleReplicationError :: Connection -> IO ()
@@ -168,16 +174,16 @@ startReplicationStream conn slotName systemLogPos updateFreq cb = do
   replicationCommandQuery <- startReplicationCommand conn slotName systemLogPos
   result <- exec conn replicationCommandQuery
   case result of
-    Nothing -> do
-      err <- maybe "startReplicationStream: unable to start stream" id <$> errorMessage conn
-      throwIO $ ReplicantException $ B.unpack err
+    Nothing -> putStrLn "Woopsie" >>= \_ -> pure ()
     Just r  -> do
       status <- resultStatus r
       case status of
         CopyBoth -> do
+          keepAliveChan <- newChan
+          statusUpdateQueue <- Q.empty
           race
-            (keepAliveHandler conn walProgressState updateFreq)
-            (handleCopyOutData walProgressState conn cb)
+            (keepAliveHandler conn keepAliveChan walProgressState statusUpdateQueue)
+            (handleCopyOutData keepAliveChan walProgressState conn cb)
             `catch`
             \exc -> do
               finish conn
@@ -187,26 +193,60 @@ startReplicationStream conn slotName systemLogPos updateFreq cb = do
           err <- errorMessage conn
           print err
 
--- | This function repeatedly sends `StandbyStatusUpdate` messages to
--- the publishing server.  This keeps the wal sender process on the
--- PostgreSQL server from timing out.
-keepAliveHandler :: Connection -> WalProgressState -> Int -> IO ()
-keepAliveHandler conn (WalProgressState walState) updateFreq = forever $ do
+-- | This listens on the channel for /primary keep-alive messages/
+-- from the server and responds to them with the /update status/
+-- message using the current WAL stream state.  It will attempt to
+-- buffer prior update messages when the socket is blocked.
+keepAliveHandler :: Connection -> Chan PrimaryKeepAlive -> WalProgressState -> FifoQueue StandbyStatusUpdate -> IO ()
+keepAliveHandler conn msgs (WalProgressState walState) statusUpdateQueue = forever $ do
+  isNull <- Q.null statusUpdateQueue
+  when (not isNull) $ sendQueuedUpdates conn statusUpdateQueue
+  keepAlive <- readChan msgs
   (WalProgress received flushed applied) <- readMVar walState
-  timestamp <- postgresEpoch
-  let statusUpdate =
-        StandbyStatusUpdate
-        received
-        flushed
-        applied
-        timestamp
-        DoNotRespond
-  copyResult <- putCopyData conn $ encode statusUpdate
-  case copyResult of
-    CopyInOk -> do
-      threadDelay updateFreq
-    CopyInError -> do
-      err <- maybe "keepAliveHandler: unknown CopyInError" id <$> errorMessage conn
-      throwIO $ ReplicantException $ B.unpack err
-    CopyInWouldBlock -> do
-      threadDelay 500
+  case primaryKeepAliveResponseExpectation keepAlive of
+    DoNotRespond -> do
+      putStrLn "DoNotRespond"
+      threadDelay 1000
+    ShouldRespond -> do
+      timestamp <- postgresEpoch
+      let statusUpdate =
+            StandbyStatusUpdate
+            received
+            flushed
+            applied
+            timestamp
+            DoNotRespond
+      print $ "statusUpdate is " ++ show statusUpdate
+      copyResult <- putCopyData conn $ encode statusUpdate
+      case copyResult of
+        CopyInOk -> do
+          putStrLn "CopyInOk!"
+        CopyInError -> do
+          err <- errorMessage conn
+          print err
+        CopyInWouldBlock -> do
+          Q.enqueue statusUpdateQueue statusUpdate
+          threadDelay 500
+
+-- | Drain the queue of StandbyStatusUpdates and send them to the
+-- server.  Keep retrying (with delay) until the queue is empty.
+--
+-- This operation will block until the queue is empty.
+sendQueuedUpdates :: Connection -> FifoQueue StandbyStatusUpdate -> IO ()
+sendQueuedUpdates conn statusUpdateQueue = do
+  maybeUpdate <- Q.dequeue statusUpdateQueue
+  case maybeUpdate of
+    Nothing -> pure ()
+    Just update -> do
+      copyResult <- putCopyData conn $ encode update
+      case copyResult of
+        CopyInOk -> do
+          threadDelay 500
+          sendQueuedUpdates conn statusUpdateQueue
+        CopyInError -> do
+          err <- maybe "sendQueuedUpdates: unknown error" id <$> errorMessage conn
+          throwIO $ ReplicantException $ B.unpack err
+        CopyInWouldBlock -> do
+          Q.enqueueRight statusUpdateQueue update
+          threadDelay 500
+          sendQueuedUpdates conn statusUpdateQueue
