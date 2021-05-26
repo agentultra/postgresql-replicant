@@ -97,6 +97,7 @@ startReplicationCommand conn slotName systemLogPos = do
       , escaped
       , " LOGICAL "
       , (toByteString systemLogPos)
+      , " (\"include-lsn\" 'on')"
       ]
 
 -- | This handles the COPY OUT mode messages.  PostgreSQL uses this
@@ -130,16 +131,16 @@ handleReplicationRow keepAliveChan walState _ row cb =
       $ ReplicantException
       $ "handleReplicationRow (decode error): " ++ err
     Right m  -> case m of
-      XLogDataM xlog -> case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
-        Left err ->
-          throwIO
-          $ ReplicantException
-          $ "handleReplicationRow (parse error): " ++ err
-        Right walLogData -> do
-          let logStart = xLogDataWalStart xlog
-          _ <- updateWalProgress walState logStart
-          _ <- cb walLogData
-          pure ()
+      XLogDataM xlog -> do
+        case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
+          Left err ->
+            throwIO
+            $ ReplicantException
+            $ "handleReplicationRow (parse error): " ++ err
+          Right walLogData -> do
+            _ <- updateWalProgress walState (changeNextLSN walLogData)
+            _ <- cb walLogData
+            pure ()
       KeepAliveM keepAlive -> atomically $ writeTChan keepAliveChan keepAlive
 
 -- | We're not expecting to write any data when reading the
