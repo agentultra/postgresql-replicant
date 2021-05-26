@@ -51,6 +51,7 @@ import Database.PostgreSQL.Replicant.Protocol
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.ReplicationSlot
 import Database.PostgreSQL.Replicant.Util
+import Database.PostgreSQL.Replicant.Types.Lsn
 
 data PgSettings
   = PgSettings
