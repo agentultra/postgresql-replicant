@@ -393,11 +393,18 @@ instance ToJSON WalLogData where
 instance FromJSON WalLogData where
   parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }
 
-newtype Change = Change [WalLogData]
+data Change
+  = Change
+  { changeNextLSN :: LSN
+  , changeDeltas  :: [WalLogData]
+  }
   deriving (Eq, Generic, Show)
 
 instance ToJSON Change where
-  toJSON (Change walLogData) = object [ "change" .= walLogData ]
+  toJSON = genericToJSON defaultOptions
 
 instance FromJSON Change where
-  parseJSON = withObject "Change" $ \o -> Change <$> o .: "change"
+  parseJSON = withObject "Change" $ \o -> do
+    nextLSN <- o .: "nextlsn"
+    deltas  <- o .: "change"
+    pure $ Change nextLSN deltas

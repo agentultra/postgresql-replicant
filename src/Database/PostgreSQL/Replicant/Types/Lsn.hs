@@ -23,6 +23,7 @@ See: https://www.postgresql.org/docs/10/datatype-pg-lsn.html
 -}
 module Database.PostgreSQL.Replicant.Types.Lsn where
 
+import Data.Aeson
 import Data.Attoparsec.ByteString.Char8
 import Data.Bits
 import Data.Bits.Extras
@@ -32,6 +33,7 @@ import qualified Data.ByteString.Lazy.Builder as Builder
 import Data.ByteString.Lazy.Builder.ASCII (word32Hex, word32HexFixed)
 import Data.Serialize
 import Data.Word
+import qualified Data.Text.Encoding as T
 import GHC.Int
 
 data LSN = LSN
@@ -47,6 +49,15 @@ instance Ord LSN where
 instance Serialize LSN where
   put = putInt64be . toInt64
   get = fromInt64 <$> getInt64be
+
+instance ToJSON LSN where
+  toJSON = String . T.decodeUtf8 . toByteString
+
+instance FromJSON LSN where
+  parseJSON = withText "LSN" $ \txt ->
+    case fromByteString . T.encodeUtf8 $ txt of
+      Left err  -> fail err
+      Right lsn -> pure lsn
 
 -- | Convert an LSN to a 64-bit integer
 toInt64 :: LSN -> Int64
