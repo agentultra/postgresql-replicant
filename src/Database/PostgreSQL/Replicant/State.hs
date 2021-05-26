@@ -35,11 +35,11 @@ data WalProgress
 
 newtype WalProgressState = WalProgressState (MVar WalProgress)
 
-updateWalProgress :: WalProgressState -> Int64 -> IO ()
-updateWalProgress (WalProgressState state) bytesReceived = do
+updateWalProgress :: WalProgressState -> LSN -> IO ()
+updateWalProgress (WalProgressState state) lsn = do
   walProgress <- takeMVar state
   putMVar state
-    $ walProgress { walProgressReceived = walProgressReceived walProgress `add` bytesReceived
-                  , walProgressFlushed  = walProgressFlushed walProgress `add` bytesReceived
-                  , walProgressApplied  = walProgressApplied walProgress `add` bytesReceived
+    $ walProgress { walProgressReceived = lsn
+                  , walProgressFlushed  = lsn
+                  , walProgressApplied  = lsn
                   }

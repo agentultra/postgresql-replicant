@@ -136,10 +136,8 @@ handleReplicationRow keepAliveChan walState _ row cb =
           $ ReplicantException
           $ "handleReplicationRow (parse error): " ++ err
         Right walLogData -> do
-          let logStart      = xLogDataWalStart xlog
-              logEnd        = xLogDataWalEnd xlog
-              bytesReceived = logEnd `subLsn` logStart
-          _ <- updateWalProgress walState bytesReceived
+          let logStart = xLogDataWalStart xlog
+          _ <- updateWalProgress walState logStart
           _ <- cb walLogData
           pure ()
       KeepAliveM keepAlive -> atomically $ writeTChan keepAliveChan keepAlive
