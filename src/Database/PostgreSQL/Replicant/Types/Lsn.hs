@@ -41,18 +41,12 @@ data LSN = LSN
   deriving (Show, Eq)
 
 instance Ord LSN where
-  compare (LSN l0 r0) (LSN l1 r1)
-    | l0 > l1 || (l0 == l1 && r0 > r1) = GT
-    | l0 < l1 || (l0 == l1 && r0 < r1) = LT
-    | otherwise = EQ
+  compare (LSN l0 r0) (LSN l1 r1) =
+    compare l0 l1 <> compare r0 r1
 
 instance Serialize LSN where
-  put lsn = do
-    putInt64be (toInt64 lsn)
-
-  get = do
-    i <- getInt64be
-    pure $ fromInt64 i
+  put = putInt64be . toInt64
+  get = fromInt64 <$> getInt64be
 
 -- | Convert an LSN to a 64-bit integer
 toInt64 :: LSN -> Int64
