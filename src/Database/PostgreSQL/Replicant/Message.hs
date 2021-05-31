@@ -13,20 +13,16 @@ body of the logical stream messages.
 -}
 module Database.PostgreSQL.Replicant.Message where
 
-import Control.Applicative
 import Control.Monad
 import Data.Aeson
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as B
 import Data.Scientific (Scientific)
 import Data.Serialize
 import Data.Text (Text)
-import Data.Word
 import GHC.Generics
 import GHC.Int
 
 import Database.PostgreSQL.Replicant.Serialize
-import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.Types.Lsn
 
 -- WAL Replication Stream messages

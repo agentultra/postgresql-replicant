@@ -30,7 +30,7 @@ import Data.Bits.Extras
 import Data.ByteString (ByteString ())
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Builder as Builder
-import Data.ByteString.Lazy.Builder.ASCII (word32Hex, word32HexFixed)
+import Data.ByteString.Lazy.Builder.ASCII (word32Hex)
 import Data.Serialize
 import Data.Word
 import qualified Data.Text.Encoding as T

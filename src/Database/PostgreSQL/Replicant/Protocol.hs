@@ -16,28 +16,22 @@ module Database.PostgreSQL.Replicant.Protocol where
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Concurrent.STM.TChan
 import Control.Exception.Base
 import Control.Monad (forever, when)
 import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
-import Data.Sequence (Seq, ViewL (..), (<|))
-import qualified Data.Sequence as S
 import Data.Serialize
-import Data.Typeable
 import Database.PostgreSQL.LibPQ
 
 import Database.PostgreSQL.Replicant.Exception
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.State
-import Database.PostgreSQL.Replicant.Util
 import Database.PostgreSQL.Replicant.Types.Lsn
 import Database.PostgreSQL.Replicant.Queue (FifoQueue)
 import qualified Database.PostgreSQL.Replicant.Queue as Q
-import Database.PostgreSQL.Replicant.ReplicationSlot
 
 -- | The information returned by the @IDENTIFY_SYSTEM@ command
 -- establishes the stream's log start, position, and information about
@@ -168,7 +162,7 @@ handleReplicationError conn = do
 -- catch and rethrow exceptions from either thread if any fails or
 -- returns.
 startReplicationStream :: Connection -> ByteString -> LSN -> Int -> (Change -> IO a) -> IO ()
-startReplicationStream conn slotName systemLogPos updateFreq cb = do
+startReplicationStream conn slotName systemLogPos _ cb = do
   let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
   replicationCommandQuery <- startReplicationCommand conn slotName systemLogPos

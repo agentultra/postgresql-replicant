@@ -19,7 +19,6 @@ import qualified Data.ByteString.Char8 as B8
 import Database.PostgreSQL.LibPQ
 
 import Database.PostgreSQL.Replicant.Exception
-import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.Types.Lsn
 
 data ReplicationSlotInfo
