@@ -1,13 +1,8 @@
 module Database.PostgreSQL.Replicant.PostgresUtils where
 
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as B
 import Data.Fixed
 import Data.Time
-import Database.PostgreSQL.LibPQ
 import GHC.Int
-
-import Database.PostgreSQL.Replicant.Types.Lsn
 
 postgresEpoch :: IO Int64
 postgresEpoch = do

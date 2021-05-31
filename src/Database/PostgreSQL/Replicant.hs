@@ -33,16 +33,12 @@ module Database.PostgreSQL.Replicant
     ) where
 
 import Control.Concurrent
-import Control.Concurrent.STM
 import Control.Exception
-import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
-import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
 import Database.PostgreSQL.LibPQ
-import GHC.Event
 import Network.Socket.KeepAlive
 import System.Posix.Types
 
@@ -51,7 +47,6 @@ import Database.PostgreSQL.Replicant.Protocol
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.ReplicationSlot
 import Database.PostgreSQL.Replicant.Util
-import Database.PostgreSQL.Replicant.Types.Lsn
 
 data PgSettings
   = PgSettings
@@ -98,7 +93,7 @@ withLogicalStream settings cb = do
     PollingFailed -> throwIO $ ReplicantException "withLogicalStream: Unable to connect to the database"
     PollingOk -> do
       maybeInfo <- identifySystemSync conn
-      info <- maybeThrow (ReplicantException "withLogicalStream: could not get system information") maybeInfo
+      _ <- maybeThrow (ReplicantException "withLogicalStream: could not get system information") maybeInfo
       repSlot <- setupReplicationSlot conn $ B.pack . pgSlotName $ settings
       startReplicationStream conn (slotName repSlot) (slotRestart repSlot) updateFreq cb
       pure ()
@@ -114,7 +109,7 @@ withLogicalStream settings cb = do
           threadWaitWrite fd
           pollConnectStart conn fd
         PollingOk -> do
-          keepAliveResult <- setKeepAlive cint $ KeepAlive True 60 2
+          _ <- setKeepAlive cint $ KeepAlive True 60 2
           pure PollingOk
         PollingFailed -> pure PollingFailed
     getUpdateDelay :: PgSettings -> Int

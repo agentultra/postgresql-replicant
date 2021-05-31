@@ -22,7 +22,6 @@ off.
 module Database.PostgreSQL.Replicant.State where
 
 import Control.Concurrent
-import GHC.Int
 import Database.PostgreSQL.Replicant.Types.Lsn
 
 data WalProgress
