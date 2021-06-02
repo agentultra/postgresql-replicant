@@ -148,7 +148,6 @@ handleReplicationWouldBlock _ = pure ()
 handleReplicationDone :: Connection -> IO ()
 handleReplicationDone _ = do
   putStrLn "We should be finished with copying?"
-  pure ()
 
 -- | Used to re-throw an exception received from the server.
 handleReplicationError :: Connection -> IO ()
@@ -184,8 +183,8 @@ startReplicationStream conn slotName systemLogPos _ cb = do
               throwIO @SomeException exc
           return ()
         _ -> do
-          err <- errorMessage conn
-          print err
+          err <- maybe "startReplicationStream: unknown error entering COPY mode" id <$> errorMessage conn
+          throwIO $ ReplicantException $ B.unpack err
 
 -- | This listens on the channel for /primary keep-alive messages/
 -- from the server and responds to them with the /update status/
@@ -203,7 +202,6 @@ keepAliveHandler conn msgs walProgressState statusUpdateQueue = forever $ do
     Just keepAlive' -> do
       case primaryKeepAliveResponseExpectation keepAlive' of
         DoNotRespond -> do
-          putStrLn "DoNotRespond"
           threadDelay 1000
         ShouldRespond -> do
           sendStatusUpdate conn walProgressState statusUpdateQueue
@@ -223,14 +221,21 @@ sendStatusUpdate conn (WalProgressState walState) statusUpdateQueue = do
         applied
         timestamp
         DoNotRespond
-  print $ "statusUpdate is " ++ show statusUpdate
   copyResult <- putCopyData conn $ encode statusUpdate
   case copyResult of
     CopyInOk -> do
-      putStrLn "CopyInOk!"
+      copyEndResult <- putCopyEnd conn Nothing
+      case copyEndResult of
+        CopyInOk -> do
+          _ <- getResult conn
+          pure ()
+        CopyInError -> do
+          err <- maybe "sendStatusUpdate: unknown error ending COPY IN" id <$> errorMessage conn
+          throwIO $ ReplicantException $ B.unpack err
+        CopyInWouldBlock -> putStrLn "TODO: Get rid of me"
     CopyInError -> do
-      err <- errorMessage conn
-      print err
+      err <- maybe "sendStatusUpdate: unknown error sending COPY IN" id <$> errorMessage conn
+      throwIO $ ReplicantException $ B.unpack err
     CopyInWouldBlock -> do
       Q.enqueue statusUpdateQueue statusUpdate
       threadDelay 500
