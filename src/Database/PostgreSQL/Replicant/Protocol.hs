@@ -22,7 +22,7 @@ import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
-import Data.Serialize
+import Data.Serialize hiding (flush)
 import Database.PostgreSQL.LibPQ
 
 import Database.PostgreSQL.Replicant.Exception
@@ -224,15 +224,15 @@ sendStatusUpdate conn (WalProgressState walState) statusUpdateQueue = do
   copyResult <- putCopyData conn $ encode statusUpdate
   case copyResult of
     CopyInOk -> do
-      copyEndResult <- putCopyEnd conn Nothing
-      case copyEndResult of
-        CopyInOk -> do
-          _ <- getResult conn
-          pure ()
-        CopyInError -> do
-          err <- maybe "sendStatusUpdate: unknown error ending COPY IN" id <$> errorMessage conn
+      flushResult <- flush conn
+      case flushResult of
+        FlushOk -> pure ()
+        FlushFailed -> do
+          err <- maybe "sendStatusUpdate: error flushing message to server" id <$> errorMessage conn
           throwIO $ ReplicantException $ B.unpack err
-        CopyInWouldBlock -> putStrLn "TODO: Get rid of me"
+        FlushWriting -> do
+          putStrLn "Wait for write-ready..."
+          pure ()
     CopyInError -> do
       err <- maybe "sendStatusUpdate: unknown error sending COPY IN" id <$> errorMessage conn
       throwIO $ ReplicantException $ B.unpack err
