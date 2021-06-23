@@ -15,19 +15,19 @@ In order to use a logical replication client you need to set the
 `wal_level` in Postgres to `logical`.  You can set that, for example,
 in your `postgres.conf` file:
 
-  wal_level = logical
+    wal_level = logical
 
 There is a known issue in the experimental release where the
 `wal_sender` process, if it has a timeout set, will time out a
 replicant client.  This will be fixed in a future release.  Unless
 you're trying to fix it, you can turn it off by setting:
 
-  wal_sender_timeout = 0
+    wal_sender_timeout = 0
 
 Then restart your server, log in as `postgres` or another super user
 and check:
 
-  SHOW wal_level
+    SHOW wal_level
 
 It should show _logical_.
 
