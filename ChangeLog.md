@@ -5,6 +5,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0.1] - 2021-06-22
+
+This is a minor update to our experimental release, fixing some pretty
+major issues:
+
+### Fixed
+- WalSender on the server hanging up because replicant wasn't sending
+  updates
+- Minor cleanup, throw better errors instead of printing debug
+  information
+
 ## [0.1.0.0] - 2021-07-27
 
 This is an experimental release to test out this library and get it
