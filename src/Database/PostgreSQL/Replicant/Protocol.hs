@@ -22,6 +22,7 @@ import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
+import Data.Maybe
 import Data.Serialize hiding (flush)
 import Database.PostgreSQL.LibPQ
 
@@ -68,10 +69,10 @@ identifySystemSync conn = do
                   pure $ Just (IdentifySystem s t logPosLsn d)
             _ -> pure Nothing
         _ -> do
-          err <- maybe "identifySystemSync: unknown error" id <$> errorMessage conn
+          err <- fromMaybe "identifySystemSync: unknown error" <$> errorMessage conn
           throwIO $ ReplicantException (B.unpack err)
     _ -> do
-      err <- maybe "identifySystemSync: unknown error" id <$> errorMessage conn
+      err <- fromMaybe "identifySystemSync: unknown error" <$> errorMessage conn
       throwIO $ ReplicantException (B.unpack err)
 
 -- | Create a @START_REPLICATION_SLOT@ query, escaping the slot name
@@ -104,10 +105,9 @@ handleCopyOutData
 handleCopyOutData chan walState conn cb = forever $ do
   d <- getCopyData conn False
   case d of
-    CopyOutRow row    -> handleReplicationRow chan walState conn row cb
-    CopyOutWouldBlock -> handleReplicationWouldBlock conn
-    CopyOutDone       -> handleReplicationDone conn
-    CopyOutError      -> handleReplicationError conn
+    CopyOutRow row -> handleReplicationRow chan walState conn row cb
+    CopyOutError   -> handleReplicationError conn
+    _              -> handleReplicationNoop
 
 handleReplicationRow
   :: TChan PrimaryKeepAlive
@@ -135,24 +135,15 @@ handleReplicationRow keepAliveChan walState _ row cb =
             pure ()
       KeepAliveM keepAlive -> atomically $ writeTChan keepAliveChan keepAlive
 
--- | We're not expecting to write any data when reading the
--- replication stream from this thread, so this is a no-op.
-handleReplicationWouldBlock :: Connection -> IO ()
-handleReplicationWouldBlock _ = pure ()
-
--- | TODO: When the @COPY OUT@ mode is finished the server sends one
--- result tuple with the information to start streaming the next WAL
--- file.
-handleReplicationDone :: Connection -> IO ()
-handleReplicationDone _ = do
-  putStrLn "We should be finished with copying?"
-
 -- | Used to re-throw an exception received from the server.
 handleReplicationError :: Connection -> IO ()
 handleReplicationError conn = do
   err <- errorMessage conn
-  throwIO (ReplicantException $ B.unpack . maybe "Unknown error" id $ err)
+  throwIO (ReplicantException $ B.unpack . fromMaybe "Unknown error" $ err)
   pure ()
+
+handleReplicationNoop :: IO ()
+handleReplicationNoop = pure ()
 
 -- | Initiate the streaming replication protocol handler.  This will
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
@@ -180,7 +171,7 @@ startReplicationStream conn slotName systemLogPos _ cb = do
               throwIO @SomeException exc
           return ()
         _ -> do
-          err <- maybe "startReplicationStream: unknown error entering COPY mode" id <$> errorMessage conn
+          err <- fromMaybe "startReplicationStream: unknown error entering COPY mode" <$> errorMessage conn
           throwIO $ ReplicantException $ B.unpack err
 
 -- | This listens on the channel for /primary keep-alive messages/
@@ -222,13 +213,13 @@ sendStatusUpdate conn w@(WalProgressState walState) = do
       case flushResult of
         FlushOk -> pure ()
         FlushFailed -> do
-          err <- maybe "sendStatusUpdate: error flushing message to server" id <$> errorMessage conn
+          err <- fromMaybe "sendStatusUpdate: error flushing message to server" <$> errorMessage conn
           throwIO $ ReplicantException $ B.unpack err
         FlushWriting -> do
           putStrLn "Wait for write-ready..."
           pure ()
     CopyInError -> do
-      err <- maybe "sendStatusUpdate: unknown error sending COPY IN" id <$> errorMessage conn
+      err <- fromMaybe "sendStatusUpdate: unknown error sending COPY IN" <$> errorMessage conn
       throwIO $ ReplicantException $ B.unpack err
     CopyInWouldBlock -> do
       mSockFd <- socket conn
