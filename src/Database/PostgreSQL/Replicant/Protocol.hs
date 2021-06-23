@@ -218,17 +218,17 @@ sendStatusUpdate conn w@(WalProgressState walState) = do
         FlushFailed -> do
           err <- fromMaybe "sendStatusUpdate: error flushing message to server" <$> errorMessage conn
           throwIO $ ReplicantException $ B.unpack err
-        FlushWriting -> do
-          putStrLn "Wait for write-ready..."
-          pure ()
+        FlushWriting -> tryAgain conn w
     CopyInError -> do
       err <- fromMaybe "sendStatusUpdate: unknown error sending COPY IN" <$> errorMessage conn
       throwIO $ ReplicantException $ B.unpack err
-    CopyInWouldBlock -> do
-      mSockFd <- socket conn
+    CopyInWouldBlock -> tryAgain conn w
+  where
+    tryAgain c ws = do
+      mSockFd <- socket c
       case mSockFd of
         Nothing ->
           throwIO $ ReplicantException "sendStatusUpdate: failed to get socket fd"
         Just sockFd -> do
           threadWaitWrite sockFd
-          sendStatusUpdate conn w
+          sendStatusUpdate conn ws
