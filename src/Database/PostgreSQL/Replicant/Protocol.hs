@@ -17,7 +17,7 @@ import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception.Base
-import Control.Monad (forever, when)
+import Control.Monad (forever)
 import Data.Aeson (eitherDecode')
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
@@ -30,8 +30,6 @@ import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.State
 import Database.PostgreSQL.Replicant.Types.Lsn
-import Database.PostgreSQL.Replicant.Queue (FifoQueue)
-import qualified Database.PostgreSQL.Replicant.Queue as Q
 
 -- | The information returned by the @IDENTIFY_SYSTEM@ command
 -- establishes the stream's log start, position, and information about
@@ -173,9 +171,8 @@ startReplicationStream conn slotName systemLogPos _ cb = do
       case status of
         CopyBoth -> do
           keepAliveChan <- atomically newTChan
-          statusUpdateQueue <- Q.empty
           race
-            (keepAliveHandler conn keepAliveChan walProgressState statusUpdateQueue)
+            (keepAliveHandler conn keepAliveChan walProgressState)
             (handleCopyOutData keepAliveChan walProgressState conn cb)
             `catch`
             \exc -> do
@@ -190,28 +187,25 @@ startReplicationStream conn slotName systemLogPos _ cb = do
 -- from the server and responds to them with the /update status/
 -- message using the current WAL stream state.  It will attempt to
 -- buffer prior update messages when the socket is blocked.
-keepAliveHandler :: Connection -> TChan PrimaryKeepAlive -> WalProgressState -> FifoQueue StandbyStatusUpdate -> IO ()
-keepAliveHandler conn msgs walProgressState statusUpdateQueue = forever $ do
-  isNull <- Q.null statusUpdateQueue
-  when (not isNull) $ sendQueuedUpdates conn statusUpdateQueue
+keepAliveHandler :: Connection -> TChan PrimaryKeepAlive -> WalProgressState -> IO ()
+keepAliveHandler conn msgs walProgressState = forever $ do
   mKeepAlive <- atomically $ tryReadTChan msgs
   case mKeepAlive of
     Nothing -> do
-      sendStatusUpdate conn walProgressState statusUpdateQueue
+      sendStatusUpdate conn walProgressState
       threadDelay 3000000
     Just keepAlive' -> do
       case primaryKeepAliveResponseExpectation keepAlive' of
         DoNotRespond -> do
           threadDelay 1000
         ShouldRespond -> do
-          sendStatusUpdate conn walProgressState statusUpdateQueue
+          sendStatusUpdate conn walProgressState
 
 sendStatusUpdate
   :: Connection
   -> WalProgressState
-  -> FifoQueue StandbyStatusUpdate
   -> IO ()
-sendStatusUpdate conn (WalProgressState walState) statusUpdateQueue = do
+sendStatusUpdate conn (WalProgressState walState) = do
   (WalProgress received flushed applied) <- readMVar walState
   timestamp <- postgresEpoch
   let statusUpdate =
@@ -237,28 +231,4 @@ sendStatusUpdate conn (WalProgressState walState) statusUpdateQueue = do
       err <- maybe "sendStatusUpdate: unknown error sending COPY IN" id <$> errorMessage conn
       throwIO $ ReplicantException $ B.unpack err
     CopyInWouldBlock -> do
-      Q.enqueue statusUpdateQueue statusUpdate
       threadDelay 500
-
--- | Drain the queue of StandbyStatusUpdates and send them to the
--- server.  Keep retrying (with delay) until the queue is empty.
---
--- This operation will block until the queue is empty.
-sendQueuedUpdates :: Connection -> FifoQueue StandbyStatusUpdate -> IO ()
-sendQueuedUpdates conn statusUpdateQueue = do
-  maybeUpdate <- Q.dequeue statusUpdateQueue
-  case maybeUpdate of
-    Nothing -> pure ()
-    Just update -> do
-      copyResult <- putCopyData conn $ encode update
-      case copyResult of
-        CopyInOk -> do
-          threadDelay 500
-          sendQueuedUpdates conn statusUpdateQueue
-        CopyInError -> do
-          err <- maybe "sendQueuedUpdates: unknown error" id <$> errorMessage conn
-          throwIO $ ReplicantException $ B.unpack err
-        CopyInWouldBlock -> do
-          Q.enqueueRight statusUpdateQueue update
-          threadDelay 500
-          sendQueuedUpdates conn statusUpdateQueue
