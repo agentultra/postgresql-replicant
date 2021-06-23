@@ -205,7 +205,7 @@ sendStatusUpdate
   :: Connection
   -> WalProgressState
   -> IO ()
-sendStatusUpdate conn (WalProgressState walState) = do
+sendStatusUpdate conn w@(WalProgressState walState) = do
   (WalProgress received flushed applied) <- readMVar walState
   timestamp <- postgresEpoch
   let statusUpdate =
@@ -231,4 +231,10 @@ sendStatusUpdate conn (WalProgressState walState) = do
       err <- maybe "sendStatusUpdate: unknown error sending COPY IN" id <$> errorMessage conn
       throwIO $ ReplicantException $ B.unpack err
     CopyInWouldBlock -> do
-      threadDelay 500
+      mSockFd <- socket conn
+      case mSockFd of
+        Nothing ->
+          throwIO $ ReplicantException "sendStatusUpdate: failed to get socket fd"
+        Just sockFd -> do
+          threadWaitWrite sockFd
+          sendStatusUpdate conn w
