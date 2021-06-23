@@ -156,7 +156,10 @@ startReplicationStream conn slotName systemLogPos _ cb = do
   replicationCommandQuery <- startReplicationCommand conn slotName systemLogPos
   result <- exec conn replicationCommandQuery
   case result of
-    Nothing -> putStrLn "Woopsie" >>= \_ -> pure ()
+    Nothing -> do
+      err <- fromMaybe "startReplicationStream: unknown error starting stream"
+        <$> errorMessage conn
+      throwIO $ ReplicantException $ "startReplicationStream: " ++ B.unpack err
     Just r  -> do
       status <- resultStatus r
       case status of
