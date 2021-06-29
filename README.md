@@ -2,12 +2,11 @@
 
 A PostgreSQL streaming logical replication client for Haskell.
 
+React to database changes in real-time.
+
 This library is currently _EXPERIMENTAL_ and is not ready for
 production yet.  Developers are encouraged to test out the library,
 add issues, contribute and make it awesome.
-
-React to database changes in real-time.  Enrich data, send
-notifications, monitor suspicious activity, etc.
 
 ## Setup
 
@@ -16,13 +15,6 @@ In order to use a logical replication client you need to set the
 in your `postgres.conf` file:
 
     wal_level = logical
-
-There is a known issue in the experimental release where the
-`wal_sender` process, if it has a timeout set, will time out a
-replicant client.  This will be fixed in a future release.  Unless
-you're trying to fix it, you can turn it off by setting:
-
-    wal_sender_timeout = 0
 
 Then restart your server, log in as `postgres` or another super user
 and check:
@@ -36,7 +28,7 @@ You will also need a user who is
 "PostgreSQL user role documentation") to use replication features.
 
 Then add a database and your user with the `REPLICATION` trait to the
-database, grant all on it if you need to, etc.
+database, grant all on it if you need to.
 
 We haven't added authorization support yet to the library so make sure
 in `pg_hba.conf` you `trust` local connections:
@@ -46,8 +38,7 @@ in `pg_hba.conf` you `trust` local connections:
 Caveat emptor.
 
 You will also need to install the `wal2json` plugin for your
-PostgreSQL server.  For example in Ubuntu-like distributions you can
-just:
+PostgreSQL server.  For example in Ubuntu-like distributions you can:
 
     $ sudo apt install postgresql-12-wal2json
 
@@ -107,4 +98,18 @@ The configuration settings are:
 You don't have to set up triggers for each table with logical
 replication.  You also don't have the message size limitation.  That
 limitation often forces clients to perform a query for each message to
-fetch the data.  We only use one connection.
+fetch the data and can use more than one connection.  We only use one
+connection.
+
+### What are the trade offs?
+
+This library uses logical replication slots.  If your program loses
+the connection to the database and cannot reconnect the server will
+hold onto WAL files until your program can reconnect and resume the
+replication stream.  On a busy database, depending on your
+configuration, this can eat up disk space quickly.
+
+It's a good idea to monitor your replication slots.  If
+`postgresql-replicant` cannot reconnect to the slot and resume the
+stream you may need to have a strategy for dropping the slot and
+recreating it once conditions return to normal.  Have a strategy.
