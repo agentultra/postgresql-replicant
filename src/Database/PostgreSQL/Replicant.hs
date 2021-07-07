@@ -29,7 +29,10 @@ provide better ergonomics.
 
 module Database.PostgreSQL.Replicant
     ( withLogicalStream
+    -- * Types
     , PgSettings (..)
+    -- * Re-exports
+    , changeNextLSN
     ) where
 
 import Control.Concurrent
@@ -46,6 +49,7 @@ import Database.PostgreSQL.Replicant.Exception
 import Database.PostgreSQL.Replicant.Protocol
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.ReplicationSlot
+import Database.PostgreSQL.Replicant.Types.Lsn
 import Database.PostgreSQL.Replicant.Util
 
 data PgSettings
@@ -82,7 +86,7 @@ pgConnectionString PgSettings {..} = B.intercalate " "
 --
 -- This function can throw exceptions in @IO@ and shut-down the
 -- socket in case of any error.
-withLogicalStream :: PgSettings -> (Change -> IO a) -> IO ()
+withLogicalStream :: PgSettings -> (Change -> IO LSN) -> IO ()
 withLogicalStream settings cb = do
   conn <- connectStart $ pgConnectionString settings
   mFd <- socket conn
