@@ -100,7 +100,7 @@ handleCopyOutData
   :: TChan PrimaryKeepAlive
   -> WalProgressState
   -> Connection
-  -> (Change -> IO a)
+  -> (Change -> IO LSN)
   -> IO ()
 handleCopyOutData chan walState conn cb = forever $ do
   d <- getCopyData conn False
@@ -114,7 +114,7 @@ handleReplicationRow
   -> WalProgressState
   -> Connection
   -> ByteString
-  -> (Change -> IO a)
+  -> (Change -> IO LSN)
   -> IO ()
 handleReplicationRow keepAliveChan walState _ row cb =
   case decode @WalCopyData row of
@@ -130,9 +130,8 @@ handleReplicationRow keepAliveChan walState _ row cb =
             $ ReplicantException
             $ "handleReplicationRow (parse error): " ++ err
           Right walLogData -> do
-            _ <- updateWalProgress walState (changeNextLSN walLogData)
-            _ <- cb walLogData
-            pure ()
+            consumedLSN <- cb walLogData
+            updateWalProgress walState consumedLSN
       KeepAliveM keepAlive -> atomically $ writeTChan keepAliveChan keepAlive
 
 -- | Used to re-throw an exception received from the server.
@@ -149,7 +148,7 @@ handleReplicationNoop = pure ()
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
 -- catch and rethrow exceptions from either thread if any fails or
 -- returns.
-startReplicationStream :: Connection -> ByteString -> LSN -> Int -> (Change -> IO a) -> IO ()
+startReplicationStream :: Connection -> ByteString -> LSN -> Int -> (Change -> IO LSN) -> IO ()
 startReplicationStream conn slotName systemLogPos _ cb = do
   let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress

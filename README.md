@@ -58,12 +58,27 @@ main = do
   let settings = PgSettings "my-user" "my-database" "localhost" "5432" "testing"
   withLogicalStream settings $ \change -> do
     print change
+    return $ changeNextLSN change
       `catch` \err ->
       print err
 ```
 
 Which should connect, create a `testing` replication slot, and start
 sending your callback the changes to your database as they arrive.
+
+The type of the callback to `withLogicalStream` is:
+
+    Change -> IO LSN
+
+Note the return type.  The *LSN* or _Log Sequence Number_ is used by
+replicant after running your callback to update its internal stream
+state and tell PostgreSQL that you have consumed this change.  This
+means that if the connection fails and replicant reconnects to the
+_same_ slot it will restart the stream at the last *LSN* replicant was
+able to successfully send to the server.
+
+All you have to do is return `changeNextLSN change` at the end of your
+callback.
 
 ### WAL Output Plugins
 

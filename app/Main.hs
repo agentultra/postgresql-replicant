@@ -18,6 +18,7 @@ main = do
   withLogicalStream settings $ \change -> do
     putStrLn "Change received!"
     print change
+    pure $ changeNextLSN change
   `catch`
   \exc -> do
     putStrLn "Something bad happened: "

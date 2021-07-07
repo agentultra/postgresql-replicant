@@ -392,7 +392,10 @@ instance FromJSON WalLogData where
 data Change
   = Change
   { changeNextLSN :: LSN
+    -- ^ Return this LSN in your callback to update the stream state
+    -- in replicant
   , changeDeltas  :: [WalLogData]
+    -- ^ The list of WAL log changes in this transaction.
   }
   deriving (Eq, Generic, Show)
 
