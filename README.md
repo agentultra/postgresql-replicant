@@ -1,4 +1,4 @@
-# postgres-replicant
+# postgresql-replicant
 
 A PostgreSQL streaming logical replication client for Haskell.
 
