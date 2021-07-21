@@ -1,5 +1,6 @@
 module Main where
 
+import Data.Aeson
 import Data.Maybe
 import Control.Exception
 import System.Environment
@@ -17,7 +18,7 @@ main = do
   let settings = PgSettings dbUser dbName dbHost dbPort dbSlot dbUpdateDelay
   withLogicalStream settings $ \change -> do
     putStrLn "Change received!"
-    print change
+    print $ encode change
     pure $ changeNextLSN change
   `catch`
   \exc -> do

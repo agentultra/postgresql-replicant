@@ -33,6 +33,7 @@ import qualified Data.ByteString.Lazy.Builder as Builder
 import Data.ByteString.Lazy.Builder.ASCII (word32Hex)
 import Data.Serialize
 import Data.Word
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import GHC.Int
 
@@ -51,7 +52,7 @@ instance Serialize LSN where
   get = fromInt64 <$> getInt64be
 
 instance ToJSON LSN where
-  toJSON = String . T.decodeUtf8 . toByteString
+  toJSON = String . T.toUpper . T.decodeUtf8 . toByteString
 
 instance FromJSON LSN where
   parseJSON = withText "LSN" $ \txt ->
