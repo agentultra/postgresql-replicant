@@ -29,7 +29,10 @@ module Database.PostgreSQL.Replicant
     ( withLogicalStream
     -- * Types
     , PgSettings (..)
-    -- * Re-exports
+    , ReplicantConnection
+    -- * Connection Handling
+    , connect
+    -- * Functions
     , changeNextLSN
     ) where
 
