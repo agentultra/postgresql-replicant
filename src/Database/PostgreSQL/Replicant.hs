@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 {-|
 Module      : Database.PostgreSQL.Replicant
 Description : A PostgreSQL streaming replication library
@@ -42,37 +40,15 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
 import Database.PostgreSQL.LibPQ
-import Network.Socket.KeepAlive
-import System.Posix.Types
 
+import Database.PostgreSQL.Replicant.Connection
 import Database.PostgreSQL.Replicant.Exception
 import Database.PostgreSQL.Replicant.Protocol
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.ReplicationSlot
+import Database.PostgreSQL.Replicant.Settings
 import Database.PostgreSQL.Replicant.Types.Lsn
 import Database.PostgreSQL.Replicant.Util
-
-data PgSettings
-  = PgSettings
-  { pgUser        :: String
-  , pgDbName      :: String
-  , pgHost        :: String
-  , pgPort        :: String
-  , pgSlotName    :: String
-  , pgUpdateDelay :: String -- ^ Controls how frequently the
-                            -- primaryKeepAlive thread updates
-                            -- PostgresSQL in @ms@
-  }
-  deriving (Eq, Show)
-
-pgConnectionString :: PgSettings -> ByteString
-pgConnectionString PgSettings {..} = B.intercalate " "
-  [ "user=" <> (B.pack pgUser)
-  , "dbname=" <> (B.pack pgDbName)
-  , "host=" <> (B.pack pgHost)
-  , "port=" <> (B.pack pgPort)
-  , "replication=database"
-  ]
 
 -- | Connect to a PostgreSQL database as a user with the replication
 -- attribute and start receiving changes using the logical replication
@@ -88,34 +64,14 @@ pgConnectionString PgSettings {..} = B.intercalate " "
 -- socket in case of any error.
 withLogicalStream :: PgSettings -> (Change -> IO LSN) -> IO ()
 withLogicalStream settings cb = do
-  conn <- connectStart $ pgConnectionString settings
-  mFd <- socket conn
-  sockFd <- maybeThrow (ReplicantException "withLogicalStream: could not get socket fd") mFd
-  pollResult <- pollConnectStart conn sockFd
+  conn <- connect settings
   let updateFreq = getUpdateDelay settings
-  case pollResult of
-    PollingFailed -> throwIO $ ReplicantException "withLogicalStream: Unable to connect to the database"
-    PollingOk -> do
-      maybeInfo <- identifySystemSync conn
-      _ <- maybeThrow (ReplicantException "withLogicalStream: could not get system information") maybeInfo
-      repSlot <- setupReplicationSlot conn $ B.pack . pgSlotName $ settings
-      startReplicationStream conn (slotName repSlot) (slotRestart repSlot) updateFreq cb
-      pure ()
+  maybeInfo <- identifySystemSync conn
+  _ <- maybeThrow (ReplicantException "withLogicalStream: could not get system information") maybeInfo
+  repSlot <- setupReplicationSlot conn $ B.pack . pgSlotName $ settings
+  startReplicationStream conn (slotName repSlot) (slotRestart repSlot) updateFreq cb
+  pure ()
   where
-    pollConnectStart :: Connection -> Fd -> IO PollingStatus
-    pollConnectStart conn fd@(Fd cint) = do
-      pollStatus <- connectPoll conn
-      case pollStatus of
-        PollingReading -> do
-          threadWaitRead fd
-          pollConnectStart conn fd
-        PollingWriting -> do
-          threadWaitWrite fd
-          pollConnectStart conn fd
-        PollingOk -> do
-          _ <- setKeepAlive cint $ KeepAlive True 60 2
-          pure PollingOk
-        PollingFailed -> pure PollingFailed
     getUpdateDelay :: PgSettings -> Int
     getUpdateDelay PgSettings {..} =
       case T.decimal . T.pack $ pgUpdateDelay of

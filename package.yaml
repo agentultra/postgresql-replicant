@@ -25,6 +25,7 @@ default-extensions:
 - GADTs
 - LambdaCase
 - OverloadedStrings
+- RecordWildCards
 - TypeApplications
 
 dependencies:

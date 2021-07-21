@@ -26,6 +26,7 @@ import Data.Maybe
 import Data.Serialize hiding (flush)
 import Database.PostgreSQL.LibPQ
 
+import Database.PostgreSQL.Replicant.Connection
 import Database.PostgreSQL.Replicant.Exception
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.PostgresUtils
@@ -49,9 +50,9 @@ identifySystemCommand = "IDENTIFY_SYSTEM"
 
 -- | Synchronously execute the @IDENTIFY SYSTEM@ command which returns
 -- some basic system information about the server.
-identifySystemSync :: Connection -> IO (Maybe IdentifySystem)
+identifySystemSync :: ReplicantConnection -> IO (Maybe IdentifySystem)
 identifySystemSync conn = do
-  result <- exec conn identifySystemCommand
+  result <- exec (getConnection conn) identifySystemCommand
   case result of
     Just r -> do
       resultStatus <- resultStatus r
@@ -69,17 +70,19 @@ identifySystemSync conn = do
                   pure $ Just (IdentifySystem s t logPosLsn d)
             _ -> pure Nothing
         _ -> do
-          err <- fromMaybe "identifySystemSync: unknown error" <$> errorMessage conn
+          err <- fromMaybe "identifySystemSync: unknown error"
+            <$> errorMessage (getConnection conn)
           throwIO $ ReplicantException (B.unpack err)
     _ -> do
-      err <- fromMaybe "identifySystemSync: unknown error" <$> errorMessage conn
+      err <- fromMaybe "identifySystemSync: unknown error"
+        <$> errorMessage (getConnection conn)
       throwIO $ ReplicantException (B.unpack err)
 
 -- | Create a @START_REPLICATION_SLOT@ query, escaping the slot name
 -- passed in by the user.
-startReplicationCommand :: Connection -> ByteString -> LSN -> IO ByteString
+startReplicationCommand :: ReplicantConnection -> ByteString -> LSN -> IO ByteString
 startReplicationCommand conn slotName systemLogPos = do
-  escapedName <- escapeIdentifier conn slotName
+  escapedName <- escapeIdentifier (getConnection conn) slotName
   case escapedName of
     Nothing -> throwIO $ ReplicantException $ "Invalid slot name: " ++ show slotName
     Just escaped ->
@@ -89,7 +92,7 @@ startReplicationCommand conn slotName systemLogPos = do
       [ "START_REPLICATION SLOT "
       , escaped
       , " LOGICAL "
-      , (toByteString systemLogPos)
+      , toByteString systemLogPos
       , " (\"include-lsn\" 'on')"
       ]
 
@@ -99,11 +102,11 @@ startReplicationCommand conn slotName systemLogPos = do
 handleCopyOutData
   :: TChan PrimaryKeepAlive
   -> WalProgressState
-  -> Connection
+  -> ReplicantConnection
   -> (Change -> IO LSN)
   -> IO ()
 handleCopyOutData chan walState conn cb = forever $ do
-  d <- getCopyData conn False
+  d <- getCopyData (getConnection conn) False
   case d of
     CopyOutRow row -> handleReplicationRow chan walState conn row cb
     CopyOutError   -> handleReplicationError conn
@@ -112,7 +115,7 @@ handleCopyOutData chan walState conn cb = forever $ do
 handleReplicationRow
   :: TChan PrimaryKeepAlive
   -> WalProgressState
-  -> Connection
+  -> ReplicantConnection
   -> ByteString
   -> (Change -> IO LSN)
   -> IO ()
@@ -135,9 +138,9 @@ handleReplicationRow keepAliveChan walState _ row cb =
       KeepAliveM keepAlive -> atomically $ writeTChan keepAliveChan keepAlive
 
 -- | Used to re-throw an exception received from the server.
-handleReplicationError :: Connection -> IO ()
+handleReplicationError :: ReplicantConnection -> IO ()
 handleReplicationError conn = do
-  err <- errorMessage conn
+  err <- errorMessage $ getConnection conn
   throwIO (ReplicantException $ B.unpack . fromMaybe "Unknown error" $ err)
   pure ()
 
@@ -148,16 +151,16 @@ handleReplicationNoop = pure ()
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
 -- catch and rethrow exceptions from either thread if any fails or
 -- returns.
-startReplicationStream :: Connection -> ByteString -> LSN -> Int -> (Change -> IO LSN) -> IO ()
+startReplicationStream :: ReplicantConnection -> ByteString -> LSN -> Int -> (Change -> IO LSN) -> IO ()
 startReplicationStream conn slotName systemLogPos _ cb = do
   let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
   replicationCommandQuery <- startReplicationCommand conn slotName systemLogPos
-  result <- exec conn replicationCommandQuery
+  result <- exec (getConnection conn) replicationCommandQuery
   case result of
     Nothing -> do
       err <- fromMaybe "startReplicationStream: unknown error starting stream"
-        <$> errorMessage conn
+        <$> errorMessage (getConnection conn)
       throwIO $ ReplicantException $ "startReplicationStream: " ++ B.unpack err
     Just r  -> do
       status <- resultStatus r
@@ -169,18 +172,18 @@ startReplicationStream conn slotName systemLogPos _ cb = do
             (handleCopyOutData keepAliveChan walProgressState conn cb)
             `catch`
             \exc -> do
-              finish conn
+              finish (getConnection conn)
               throwIO @SomeException exc
           return ()
         _ -> do
-          err <- fromMaybe "startReplicationStream: unknown error entering COPY mode" <$> errorMessage conn
+          err <- fromMaybe "startReplicationStream: unknown error entering COPY mode" <$> errorMessage (getConnection conn)
           throwIO $ ReplicantException $ B.unpack err
 
 -- | This listens on the channel for /primary keep-alive messages/
 -- from the server and responds to them with the /update status/
 -- message using the current WAL stream state.  It will attempt to
 -- buffer prior update messages when the socket is blocked.
-keepAliveHandler :: Connection -> TChan PrimaryKeepAlive -> WalProgressState -> IO ()
+keepAliveHandler :: ReplicantConnection -> TChan PrimaryKeepAlive -> WalProgressState -> IO ()
 keepAliveHandler conn msgs walProgressState = forever $ do
   mKeepAlive <- atomically $ tryReadTChan msgs
   case mKeepAlive of
@@ -195,7 +198,7 @@ keepAliveHandler conn msgs walProgressState = forever $ do
           sendStatusUpdate conn walProgressState
 
 sendStatusUpdate
-  :: Connection
+  :: ReplicantConnection
   -> WalProgressState
   -> IO ()
 sendStatusUpdate conn w@(WalProgressState walState) = do
@@ -208,20 +211,20 @@ sendStatusUpdate conn w@(WalProgressState walState) = do
         applied
         timestamp
         DoNotRespond
-  copyResult <- putCopyData conn $ encode statusUpdate
+  copyResult <- putCopyData (getConnection conn) $ encode statusUpdate
   case copyResult of
     CopyInOk -> do
-      flushResult <- flush conn
+      flushResult <- flush (getConnection conn)
       case flushResult of
         FlushOk -> pure ()
         FlushFailed -> do
-          err <- fromMaybe "sendStatusUpdate: error flushing message to server" <$> errorMessage conn
+          err <- fromMaybe "sendStatusUpdate: error flushing message to server" <$> errorMessage (getConnection conn)
           throwIO $ ReplicantException $ B.unpack err
-        FlushWriting -> tryAgain conn w
+        FlushWriting -> tryAgain (getConnection conn) w
     CopyInError -> do
-      err <- fromMaybe "sendStatusUpdate: unknown error sending COPY IN" <$> errorMessage conn
+      err <- fromMaybe "sendStatusUpdate: unknown error sending COPY IN" <$> errorMessage (getConnection conn)
       throwIO $ ReplicantException $ B.unpack err
-    CopyInWouldBlock -> tryAgain conn w
+    CopyInWouldBlock -> tryAgain (getConnection conn) w
   where
     tryAgain c ws = do
       mSockFd <- socket c
