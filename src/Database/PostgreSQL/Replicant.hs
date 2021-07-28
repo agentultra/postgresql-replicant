@@ -32,6 +32,7 @@ module Database.PostgreSQL.Replicant
     , ReplicantConnection
     -- * Connection Handling
     , connect
+    , unsafeCreateConnection
     -- * Functions
     , changeNextLSN
     ) where

@@ -12,6 +12,7 @@ module Database.PostgreSQL.Replicant.Connection
     -- * Constructor
   , connect
   , getConnection
+  , unsafeCreateConnection
   )
 where
 
@@ -61,3 +62,10 @@ pollConnectStart conn fd@(Fd cint) = do
       _ <- setKeepAlive cint $ KeepAlive True 60 2
       pure ConnectSuccess
     PollingFailed -> pure ConnectFailure
+
+-- | Unsafe function for wrapping regular libpq Connection.  This is
+-- unsafe because the Connection needs to be set up to send
+-- replication commands.  Improperly constructed connections can lead
+-- to runtime exceptions.
+unsafeCreateConnection :: Connection -> ReplicantConnection
+unsafeCreateConnection = ReplicantConnection
