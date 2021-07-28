@@ -8,6 +8,10 @@ This library is currently _EXPERIMENTAL_ and is not ready for
 production yet.  Developers are encouraged to test out the library,
 add issues, contribute and make it awesome.
 
+For more, read the find
+[documentation](https://agentultra.github.io/postgresql-replicant
+"postgresql-replicant documentation")
+
 ## Setup
 
 In order to use a logical replication client you need to set the
@@ -55,7 +59,7 @@ import Database.PostgreSQL.Replicant
 
 main :: IO ()
 main = do
-  let settings = PgSettings "my-user" "my-database" "localhost" "5432" "testing"
+  let settings = PgSettings "my-user" (Just "my-password") "my-database" "localhost" "5432" "testing"
   withLogicalStream settings $ \change -> do
     print change
     return $ changeNextLSN change
