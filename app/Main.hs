@@ -9,12 +9,12 @@ import Database.PostgreSQL.Replicant
 
 main :: IO ()
 main = do
-  dbUser <- maybe "postgresql" id <$> lookupEnv "PG_USER"
-  dbName <- maybe "postgresql" id <$> lookupEnv "PG_DATABASE"
-  dbHost <- maybe "localhost" id <$> lookupEnv "PG_HOST"
-  dbPort <- maybe "5432" id <$> lookupEnv "PG_PORT"
-  dbSlot <- maybe "replicant_test" id <$> lookupEnv "PG_SLOTNAME"
-  dbUpdateDelay <- maybe "3000" id <$> lookupEnv "PG_UPDATEDELAY"
+  dbUser <- fromMaybe "postgresql" <$> lookupEnv "PG_USER"
+  dbName <- fromMaybe "postgresql" <$> lookupEnv "PG_DATABASE"
+  dbHost <- fromMaybe "localhost" <$> lookupEnv "PG_HOST"
+  dbPort <- fromMaybe "5432" <$> lookupEnv "PG_PORT"
+  dbSlot <- fromMaybe "replicant_test" <$> lookupEnv "PG_SLOTNAME"
+  dbUpdateDelay <- fromMaybe "3000" <$> lookupEnv "PG_UPDATEDELAY"
   let settings = PgSettings dbUser dbName dbHost dbPort dbSlot dbUpdateDelay
   withLogicalStream settings $ \change -> do
     putStrLn "Change received!"

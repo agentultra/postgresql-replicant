@@ -26,15 +26,23 @@ provide better ergonomics.
 -}
 
 module Database.PostgreSQL.Replicant
-    ( withLogicalStream
+    (
     -- * Types
+      Change (..)
+    , Column (..)
+    , Delete (..)
+    , Insert (..)
+    , Message (..)
     , PgSettings (..)
     , ReplicantConnection
+    , Update (..)
+    , WalLogData (..)
     -- * Connection Handling
     , connect
+    , getConnection
     , unsafeCreateConnection
     -- * Functions
-    , changeNextLSN
+    , withLogicalStream
     ) where
 
 import Control.Concurrent
@@ -43,7 +51,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
-import Database.PostgreSQL.LibPQ
+import Database.PostgreSQL.LibPQ hiding (Column)
 
 import Database.PostgreSQL.Replicant.Connection
 import Database.PostgreSQL.Replicant.Exception
