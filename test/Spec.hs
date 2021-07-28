@@ -9,7 +9,6 @@ import GHC.Int
 
 import Database.PostgreSQL.Replicant.Message
 import Database.PostgreSQL.Replicant.Types.Lsn
-import qualified Database.PostgreSQL.Replicant.Queue as Q
 
 examplePrimaryKeepAliveMessage :: ByteString
 examplePrimaryKeepAliveMessage
@@ -84,37 +83,3 @@ main = hspec $ do
         it "should be equivalent to fromByteString/toByteString" $ do
           let (Right lsn) = fromByteString "16/3002D50"
           (toByteString <$> (decode . encode @LSN $ lsn)) `shouldBe` Right "16/3002d50"
-
-  describe "FifoQueue" $ do
-    it "should dequeue Nothing if the queue is empty" $ do
-      queue <- Q.empty @Int
-      res <- Q.dequeue queue
-      res `shouldBe` Nothing
-
-    it "should respect first-in, first-out" $ do
-      queue <- Q.empty
-      Q.enqueue queue 1
-      Q.enqueue queue 2
-      Q.enqueue queue 3
-      res <- Q.dequeue queue
-      res `shouldBe` Just 1
-
-    context "null" $ do
-      it "should return True if the queue is empty" $ do
-        queue <- Q.empty
-        res <- Q.null queue
-        res `shouldBe` True
-
-      it "should return False if the queue has at least one element" $ do
-        queue <- Q.empty
-        Q.enqueue queue 1
-        res <- Q.null queue
-        res `shouldBe` False
-
-    context "enqueueRight" $ do
-      it "should enqueue an item at the head of the queue" $ do
-        queue <- Q.empty
-        Q.enqueue queue 1
-        Q.enqueueRight queue 2
-        res <- Q.dequeue queue
-        res `shouldBe` Just 2
