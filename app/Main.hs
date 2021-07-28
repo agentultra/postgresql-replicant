@@ -15,7 +15,7 @@ main = do
   dbPort <- fromMaybe "5432" <$> lookupEnv "PG_PORT"
   dbSlot <- fromMaybe "replicant_test" <$> lookupEnv "PG_SLOTNAME"
   dbUpdateDelay <- fromMaybe "3000" <$> lookupEnv "PG_UPDATEDELAY"
-  let settings = PgSettings dbUser dbName dbHost dbPort dbSlot dbUpdateDelay
+  let settings = PgSettings dbUser Nothing dbName dbHost dbPort dbSlot dbUpdateDelay
   withLogicalStream settings $ \change -> do
     putStrLn "Change received!"
     print $ encode change

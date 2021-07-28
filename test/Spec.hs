@@ -8,6 +8,7 @@ import Data.Word
 import GHC.Int
 
 import Database.PostgreSQL.Replicant.Message
+import Database.PostgreSQL.Replicant.Settings
 import Database.PostgreSQL.Replicant.Types.Lsn
 
 examplePrimaryKeepAliveMessage :: ByteString
@@ -83,3 +84,31 @@ main = hspec $ do
         it "should be equivalent to fromByteString/toByteString" $ do
           let (Right lsn) = fromByteString "16/3002D50"
           (toByteString <$> (decode . encode @LSN $ lsn)) `shouldBe` Right "16/3002d50"
+
+  context "Settings" $ do
+    describe "pgConnectionString" $ do
+      it "should include the password when specified" $ do
+        let settings
+              = PgSettings
+              { pgUser = "foo"
+              , pgPassword = Just "bar"
+              , pgDbName = "test"
+              , pgHost = "hostname"
+              , pgPort = "5432"
+              , pgSlotName = "test-slot"
+              , pgUpdateDelay = "43"
+              }
+        pgConnectionString settings `shouldBe` "user=foo pass=bar dbname=test host=hostname port=5432 replication=database"
+
+      it "should omit the password when not specified" $ do
+        let settings
+              = PgSettings
+              { pgUser = "foo"
+              , pgPassword = Nothing
+              , pgDbName = "test"
+              , pgHost = "hostname"
+              , pgPort = "5432"
+              , pgSlotName = "test-slot"
+              , pgUpdateDelay = "43"
+              }
+        pgConnectionString settings `shouldBe` "user=foo  dbname=test host=hostname port=5432 replication=database"
