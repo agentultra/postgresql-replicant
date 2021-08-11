@@ -110,6 +110,26 @@ The configuration settings are:
 - `PG_UPDATEDELAY`: The frequency (in _ms_) to update PostgreSQL on
   the stream status
 
+## Profiling
+
+To enable profile builds, see `stack.yaml`
+
+Build `stack build`
+
+Then run `stack exec --profile -- replicant-example +RTS -p` (make
+sure to set the right database configs)
+
+Run `bin/bench.sh my-database create` if this is the first time
+running the bench.  This will create a table called,
+`replicant_profile`.
+
+Run `bin/bench.sh my-database`, wait a bit, cancel it.  It will insert
+a bunch of rows into `replicant_profile`.  Feel free to run other SQL
+statements that modify the table while the bench is running.  Cancel
+the script when you're done.
+
+Then you can generate reports, see the [GHC Manual on Profiling](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/profiling.html# "GHC Manual on Profiling")
+
 ## FAQ
 
 ### Why not use LISTEN/NOTIFY
