@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 module Database.PostgreSQL.Replicant.Serialize where
 
 import Data.ByteString (ByteString)

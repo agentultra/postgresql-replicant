@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 {-|
 Module      : Database.PostgreSQL.Replicant.State
 Description : Internal replication stream state

@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 {-|
 Module      : Database.PostgreSQL.Replicant
 Description : A PostgreSQL streaming replication library

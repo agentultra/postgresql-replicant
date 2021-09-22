@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 module Database.PostgreSQL.Replicant.PostgresUtils where
 
 import Data.Fixed

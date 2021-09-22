@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 module Database.PostgreSQL.Replicant.Exception where
 
 import Control.Exception

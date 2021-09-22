@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 module Database.PostgreSQL.Replicant.Settings where
 
 import Data.ByteString (ByteString)
