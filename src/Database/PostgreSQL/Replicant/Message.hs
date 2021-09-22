@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 {-|
 Module      : Database.PostgreSQL.Replicant.Message
 Description : Streaming replication message types

@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 {-|
 Module      : Database.PostgreSQL.Replicant.ReplicationSlot
 Description : Replication slot query commands

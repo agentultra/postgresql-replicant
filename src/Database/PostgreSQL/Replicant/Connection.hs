@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 {-
 Module : Database.PostgreSQL.Replicant.Connection
 Description : Create replication handling connections to PostgreSQL

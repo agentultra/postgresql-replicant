@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 {-|
 Module      : Database.PostgreSQL.Replicant.Types.Lsn
 Description : Types and parsers for LSNs
