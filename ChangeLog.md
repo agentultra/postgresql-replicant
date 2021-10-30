@@ -5,6 +5,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0.1] - 2021-10-30
+
+This is a memory performance improvement update.  We made all of the
+modules strict which significantly reduced unnecessary allocations and
+makes memory usage constant.
+
+### Changed
+- Added `Strict` pragmas to all modules
+
 ## [0.2.0.0] - 2021-07-27
 
 This is a minor update that adds a replication connection type,
