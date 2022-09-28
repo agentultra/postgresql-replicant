@@ -17,9 +17,11 @@ module Database.PostgreSQL.Replicant.Message where
 
 import Control.Monad
 import Data.Aeson
+import Data.Binary
+import Data.Binary.Get
+import Data.Binary.Put
 import Data.ByteString (ByteString)
 import Data.Scientific (Scientific)
-import Data.Serialize
 import Data.Text (Text)
 import GHC.Generics
 import GHC.Int
@@ -36,7 +38,7 @@ data ResponseExpectation
   | DoNotRespond
   deriving (Eq, Generic, Show)
 
-instance Serialize ResponseExpectation where
+instance Binary ResponseExpectation where
   put ShouldRespond = putWord8 1
   put DoNotRespond  = putWord8 0
 
@@ -62,7 +64,7 @@ data PrimaryKeepAlive
   }
   deriving (Eq, Generic, Show)
 
-instance Serialize PrimaryKeepAlive where
+instance Binary PrimaryKeepAlive where
   put (PrimaryKeepAlive walEnd sendTime responseExpectation) = do
     putWord8 0x6B -- 'k'
     putInt64be walEnd
@@ -70,7 +72,7 @@ instance Serialize PrimaryKeepAlive where
     put responseExpectation
 
   get = do
-    _ <- getBytes 1
+    _ <- getByteString 1
     walEnd <- getInt64be
     sendTime <- getInt64be
     responseExpectation <- get
@@ -89,7 +91,7 @@ data StandbyStatusUpdate
   }
   deriving (Eq, Generic, Show)
 
-instance Serialize StandbyStatusUpdate where
+instance Binary StandbyStatusUpdate where
   put (StandbyStatusUpdate
        walReceived
        walFlushed
@@ -104,7 +106,7 @@ instance Serialize StandbyStatusUpdate where
     put responseExpectation
 
   get = do
-    _ <- getBytes 1 -- should expect 0x72, 'r'
+    _ <- getByteString 1 -- should expect 0x72, 'r'
     walReceived         <- get
     walFlushed          <- get
     walApplied          <- get
@@ -128,7 +130,7 @@ data XLogData
   }
   deriving (Eq, Generic, Show)
 
-instance Serialize XLogData where
+instance Binary XLogData where
   put (XLogData walStart walEnd sendTime walData) = do
     putWord8 0x77 -- 'w'
     put walStart
@@ -137,7 +139,7 @@ instance Serialize XLogData where
     putByteString walData
 
   get = do
-    _ <- getBytes 1 -- should expec '0x77', 'w'
+    _ <- getByteString 1 -- should expec '0x77', 'w'
     walStart <- get
     walEnd   <- get
     sendTime <- getInt64be
@@ -153,7 +155,7 @@ data HotStandbyFeedback
   }
   deriving (Eq, Generic, Show)
 
-instance Serialize HotStandbyFeedback where
+instance Binary HotStandbyFeedback where
   put (HotStandbyFeedback clientSendTime currentXMin currentEpoch) = do
     putWord8 0x68
     putInt64be clientSendTime
@@ -161,20 +163,20 @@ instance Serialize HotStandbyFeedback where
     putInt32be currentEpoch
 
   get = do
-    _ <- getBytes 1 -- should expect '0x68' 'h'
+    _ <- getByteString 1 -- should expect '0x68' 'h'
     clientSendTime <- getInt64be
     currentXmin <- getInt32be
     currentEpoch <- getInt32be
     pure $ HotStandbyFeedback clientSendTime currentXmin currentEpoch
 
 -- | This structure wraps the two messages sent by the server so that
--- we get a Serialize instance for both.
+-- we get a Binary instance for both.
 data WalCopyData
   = XLogDataM !XLogData
   | KeepAliveM !PrimaryKeepAlive
   deriving (Eq, Generic, Show)
 
-instance Serialize WalCopyData where
+instance Binary WalCopyData where
   put (XLogDataM xLogData)   = put xLogData
   put (KeepAliveM keepAlive) = put keepAlive
   get = do

@@ -27,13 +27,15 @@ module Database.PostgreSQL.Replicant.Types.Lsn where
 
 import Data.Aeson
 import Data.Attoparsec.ByteString.Char8
+import Data.Binary
+import Data.Binary.Get
+import Data.Binary.Put
 import Data.Bits
 import Data.Bits.Extras
 import Data.ByteString (ByteString ())
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Builder as Builder
 import Data.ByteString.Lazy.Builder.ASCII (word32Hex)
-import Data.Serialize
 import Data.Word
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -49,7 +51,7 @@ instance Ord LSN where
   compare (LSN l0 r0) (LSN l1 r1) =
     compare l0 l1 <> compare r0 r1
 
-instance Serialize LSN where
+instance Binary LSN where
   put = putInt64be . toInt64
   get = fromInt64 <$> getInt64be
 

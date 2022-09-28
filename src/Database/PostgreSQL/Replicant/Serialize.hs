@@ -2,11 +2,10 @@
 
 module Database.PostgreSQL.Replicant.Serialize where
 
+import Data.Binary.Get
 import Data.ByteString (ByteString)
-import Data.Serialize
+import qualified Data.ByteString.Lazy as BL
 
--- | Consume the rest of the @Get a@ input as a ByteString
+-- | Consume the rest of the @Get a@ input as a strict ByteString
 consumeByteStringToEnd :: Get ByteString
-consumeByteStringToEnd = do
-  numRemaining <- remaining
-  getByteString numRemaining
+consumeByteStringToEnd = BL.toStrict <$> getRemainingLazyByteString

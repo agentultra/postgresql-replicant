@@ -21,11 +21,11 @@ import Control.Concurrent.STM
 import Control.Exception.Base
 import Control.Monad (forever)
 import Data.Aeson (eitherDecode')
+import Data.Binary
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B
 import Data.Maybe
-import Data.Serialize hiding (flush)
 import Database.PostgreSQL.LibPQ
 
 import Database.PostgreSQL.Replicant.Connection
@@ -122,12 +122,12 @@ handleReplicationRow
   -> (Change -> IO LSN)
   -> IO ()
 handleReplicationRow keepAliveChan walState _ row cb =
-  case decode @WalCopyData row of
-    Left err ->
+  case decodeOrFail @WalCopyData . BL.fromStrict $ row of
+    Left (_, _, err) ->
       throwIO
       $ ReplicantException
       $ "handleReplicationRow (decode error): " ++ err
-    Right m  -> case m of
+    Right (_, _, m) -> case m of
       XLogDataM xlog -> do
         case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
           Left err ->
@@ -148,6 +148,7 @@ handleReplicationError conn = do
 
 handleReplicationNoop :: IO ()
 handleReplicationNoop = pure ()
+
 
 -- | Initiate the streaming replication protocol handler.  This will
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
@@ -213,7 +214,7 @@ sendStatusUpdate conn w@(WalProgressState walState) = do
         applied
         timestamp
         DoNotRespond
-  copyResult <- putCopyData (getConnection conn) $ encode statusUpdate
+  copyResult <- putCopyData (getConnection conn) . BL.toStrict $ encode statusUpdate
   case copyResult of
     CopyInOk -> do
       flushResult <- flush (getConnection conn)
