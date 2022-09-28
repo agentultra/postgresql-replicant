@@ -37,9 +37,9 @@ library:
   - aeson
   - attoparsec
   - async
+  - binary
   - bits
   - bytestring
-  - cereal
   - containers
   - keep-alive
   - postgresql-libpq
