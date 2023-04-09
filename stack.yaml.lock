@@ -5,16 +5,16 @@
 
 packages:
 - completed:
-    hackage: keep-alive-0.1.1.0@sha256:92203e8d7f925693b97c130036f449013474656521587e3f60848ec3e0b2acce,1677
+    hackage: keep-alive-0.2.1.0@sha256:77c18d13c096932f5ecc350468f277540b0bd804f4a770a45080149599d8a05c,1524
     pantry-tree:
-      size: 537
-      sha256: e619c02fd7df952d43aed9ec1fdd9a672c431556015765e5510434351eab609c
+      sha256: c29540be7eb84170c4079d5e21f16e2f79011bccd5db87eb194cd22db2586a1d
+      size: 493
   original:
-    hackage: keep-alive-0.1.1.0@sha256:92203e8d7f925693b97c130036f449013474656521587e3f60848ec3e0b2acce,1677
+    hackage: keep-alive-0.2.1.0
 snapshots:
 - completed:
+    sha256: c2aaae52beeacf6a5727c1010f50e89d03869abfab6d2c2658ade9da8ed50c73
     size: 533252
     url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/27.yaml
-    sha256: c2aaae52beeacf6a5727c1010f50e89d03869abfab6d2c2658ade9da8ed50c73
   original:
     url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/27.yaml

@@ -42,7 +42,7 @@ packages:
 #
 # extra-deps: []
 extra-deps:
-- keep-alive-0.2.1
+- keep-alive-0.2.1.0
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
