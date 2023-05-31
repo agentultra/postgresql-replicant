@@ -16,10 +16,14 @@ main = do
   dbSlot <- fromMaybe "replicant_test" <$> lookupEnv "PG_SLOTNAME"
   dbUpdateDelay <- fromMaybe "3000" <$> lookupEnv "PG_UPDATEDELAY"
   let settings = PgSettings dbUser Nothing dbName dbHost dbPort dbSlot dbUpdateDelay
-  withLogicalStream settings $ \change -> do
+  withLogicalStream settings $ \changePayload -> do
     putStrLn "Change received!"
-    print $ encode change
-    pure $ changeNextLSN change
+    print $ encode changePayload
+    case changePayload of
+      InformationMessage infoMsg ->
+        pure Nothing
+      ChangeMessage change ->
+        pure . Just $ changeNextLSN change
   `catch`
   \exc -> do
     putStrLn "Something bad happened: "

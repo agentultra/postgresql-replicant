@@ -31,8 +31,10 @@ module Database.PostgreSQL.Replicant
     (
     -- * Types
       Change (..)
+    , ChangePayload (..)
     , Column (..)
     , Delete (..)
+    , Information (..)
     , Insert (..)
     , Message (..)
     , PgSettings (..)
@@ -76,7 +78,7 @@ import Database.PostgreSQL.Replicant.Util
 --
 -- This function can throw exceptions in @IO@ and shut-down the
 -- socket in case of any error.
-withLogicalStream :: PgSettings -> (Change -> IO LSN) -> IO ()
+withLogicalStream :: PgSettings -> (ChangePayload -> IO (Maybe LSN)) -> IO ()
 withLogicalStream settings cb = do
   conn <- connect settings
   let updateFreq = getUpdateDelay settings

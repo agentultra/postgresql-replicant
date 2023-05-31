@@ -391,6 +391,39 @@ instance ToJSON WalLogData where
 instance FromJSON WalLogData where
   parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }
 
+data ChangePayload
+  = InformationMessage !Information
+  | ChangeMessage !Change
+  deriving (Eq, Generic, Show)
+
+instance ToJSON ChangePayload where
+  toJSON = genericToJSON defaultOptions
+
+instance FromJSON ChangePayload where
+  parseJSON = withObject "ChangePayload" $ \o -> do
+    maybeChangeLSN <- o .:? "nextlsn"
+    case maybeChangeLSN of
+      Nothing -> do
+        messages <- o .: "change"
+        pure . InformationMessage $ Information messages
+      Just lsn -> do
+        deltas <- o .: "change"
+        pure . ChangeMessage $ Change lsn deltas
+
+data Information
+  = Information
+  { informationMessages :: ![Message]
+  }
+  deriving (Eq, Generic, Show)
+
+instance ToJSON Information where
+  toJSON = genericToJSON defaultOptions
+
+instance FromJSON Information where
+  parseJSON = withObject "Information" $ \o -> do
+    messages <- o .: "change"
+    pure $ Information messages
+
 data Change
   = Change
   { changeNextLSN :: LSN

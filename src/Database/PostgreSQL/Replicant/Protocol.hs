@@ -35,6 +35,8 @@ import Database.PostgreSQL.Replicant.PostgresUtils
 import Database.PostgreSQL.Replicant.State
 import Database.PostgreSQL.Replicant.Types.Lsn
 
+import qualified Debug.Trace as Debug
+
 -- | The information returned by the @IDENTIFY_SYSTEM@ command
 -- establishes the stream's log start, position, and information about
 -- the database.
@@ -105,7 +107,7 @@ handleCopyOutData
   :: TChan PrimaryKeepAlive
   -> WalProgressState
   -> ReplicantConnection
-  -> (Change -> IO LSN)
+  -> (ChangePayload -> IO (Maybe LSN))
   -> IO ()
 handleCopyOutData chan walState conn cb = forever $ do
   d <- getCopyData (getConnection conn) False
@@ -119,7 +121,7 @@ handleReplicationRow
   -> WalProgressState
   -> ReplicantConnection
   -> ByteString
-  -> (Change -> IO LSN)
+  -> (ChangePayload -> IO (Maybe LSN))
   -> IO ()
 handleReplicationRow keepAliveChan walState _ row cb =
   case decode @WalCopyData row of
@@ -129,14 +131,17 @@ handleReplicationRow keepAliveChan walState _ row cb =
       $ "handleReplicationRow (decode error): " ++ err
     Right m  -> case m of
       XLogDataM xlog -> do
-        case eitherDecode' @Change $ BL.fromStrict $ xLogDataWalData xlog of
+        case Debug.trace ("xlog" ++ show xlog) $ eitherDecode' @ChangePayload $ BL.fromStrict $ xLogDataWalData xlog of
           Left err ->
             throwIO
             $ ReplicantException
             $ "handleReplicationRow (parse error): " ++ err
           Right walLogData -> do
-            consumedLSN <- cb walLogData
-            updateWalProgress walState consumedLSN
+            maybeConsumedLSN <- cb walLogData
+            case maybeConsumedLSN of
+              Nothing -> pure ()
+              Just consumedLSN ->
+                updateWalProgress walState consumedLSN
       KeepAliveM keepAlive -> atomically $ writeTChan keepAliveChan keepAlive
 
 -- | Used to re-throw an exception received from the server.
@@ -153,7 +158,7 @@ handleReplicationNoop = pure ()
 -- race the /keep-alive/ and /copy data/ handler threads.  It will
 -- catch and rethrow exceptions from either thread if any fails or
 -- returns.
-startReplicationStream :: ReplicantConnection -> ByteString -> LSN -> Int -> (Change -> IO LSN) -> IO ()
+startReplicationStream :: ReplicantConnection -> ByteString -> LSN -> Int -> (ChangePayload -> IO (Maybe LSN)) -> IO ()
 startReplicationStream conn slotName systemLogPos _ cb = do
   let initialWalProgress = WalProgress systemLogPos systemLogPos systemLogPos
   walProgressState <- WalProgressState <$> newMVar initialWalProgress
