@@ -31,8 +31,7 @@ import Data.Bits
 import Data.Bits.Extras
 import Data.ByteString (ByteString ())
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Lazy.Builder as Builder
-import Data.ByteString.Lazy.Builder.ASCII (word32Hex)
+import qualified Data.ByteString.Builder as Builder
 import Data.Serialize
 import Data.Word
 import qualified Data.Text as T
@@ -88,9 +87,9 @@ fromByteString = parseOnly lsnParser
 toByteString :: LSN -> ByteString
 toByteString (LSN filepart off) = BL.toStrict
   $ Builder.toLazyByteString
-  ( word32Hex (fromIntegral filepart)
+  ( Builder.word32Hex (fromIntegral filepart)
     <> Builder.char7 '/'
-    <> word32Hex (fromIntegral off)
+    <> Builder.word32Hex (fromIntegral off)
   )
 
 -- | Add a number of bytes to an LSN
